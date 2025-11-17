@@ -29,6 +29,8 @@ const request = async (path, options = {}) => {
   return response.json()
 }
 
+const IDLE_INTERVAL_MS = 60
+
 const App = () => {
   const [employees, setEmployees] = useState([])
   const [winners, setWinners] = useState([])
@@ -43,6 +45,10 @@ const App = () => {
   const drawTimerRef = useRef(null)
   const idleIntervalRef = useRef(null)
   const idleResumeRef = useRef(null)
+  const audioCtxRef = useRef(null)
+  const lastTickTimeRef = useRef(0)
+  const lastPointerIndexRef = useRef(null)
+  const employeesCountRef = useRef(0)
 
   const fetchEmployees = useCallback(async () => {
     const result = await request('/api/employees')
@@ -59,11 +65,42 @@ const App = () => {
     setConfig(result)
   }, [])
 
+  const getAudioContext = useCallback(() => {
+    if (typeof window === 'undefined') return null
+    if (audioCtxRef.current) return audioCtxRef.current
+    const AudioCtx = window.AudioContext || window.webkitAudioContext
+    if (!AudioCtx) return null
+    audioCtxRef.current = new AudioCtx()
+    return audioCtxRef.current
+  }, [])
+
+  const playTick = useCallback(() => {
+    const ctx = getAudioContext()
+    if (!ctx) return
+    const now = ctx.currentTime
+    if (now - lastTickTimeRef.current < 0.02) return
+    lastTickTimeRef.current = now
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = 'triangle'
+    osc.frequency.value = 650
+    gain.gain.setValueAtTime(0, now)
+    gain.gain.linearRampToValueAtTime(0.35, now + 0.008)
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07)
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.start(now)
+    osc.stop(now + 0.1)
+  }, [getAudioContext])
+
   const startIdleMotion = useCallback(() => {
     if (idleIntervalRef.current || isSpinning) return
     idleIntervalRef.current = setInterval(() => {
-      setRotation((prev) => prev + 0.35)
-    }, 60)
+      const count = employeesCountRef.current || 1
+      const slicePerSecond = 360 / count
+      const delta = (slicePerSecond / 1000) * IDLE_INTERVAL_MS
+      setRotation((prev) => prev + delta)
+    }, IDLE_INTERVAL_MS)
   }, [isSpinning])
 
   const stopIdleMotion = useCallback(() => {
@@ -148,6 +185,18 @@ const App = () => {
     }
   }, [config, fetchWinners, fetchConfig])
 
+  const displayedWinners = useMemo(() => winners.slice(0, 3), [winners])
+
+  const pointerInfo = useMemo(() => {
+    if (!employees.length) return { employee: null, index: null }
+    const normalizedRotation = ((rotation % 360) + 360) % 360
+    const pointerAngle = (360 - normalizedRotation + 360) % 360
+    const slice = 360 / employees.length
+    const index = Math.floor(pointerAngle / slice) % employees.length
+    return { employee: employees[index], index }
+  }, [rotation, employees])
+  const pointerEmployee = pointerInfo.employee
+
   useEffect(() => {
     if (!winners.length || !employees.length) return
     if (winners[0].id === displayedWinnerId) return
@@ -155,25 +204,44 @@ const App = () => {
     spinToWinner(winners[0])
   }, [winners, displayedWinnerId, spinToWinner, employees.length])
 
-useEffect(() => {
-  return () => {
-    if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current)
-    if (drawTimerRef.current) clearTimeout(drawTimerRef.current)
-    if (idleResumeRef.current) clearTimeout(idleResumeRef.current)
-    stopIdleMotion()
-  }
-}, [stopIdleMotion])
+  useEffect(() => {
+    const index = pointerInfo.index
+    if (index === null || index === undefined) return
+    if (lastPointerIndexRef.current === index) return
+    lastPointerIndexRef.current = index
+    playTick()
+  }, [pointerInfo.index, playTick])
 
-  const displayedWinners = useMemo(() => winners.slice(0, 3), [winners])
+  useEffect(() => {
+    const resumeAudio = () => {
+      const ctx = getAudioContext()
+      if (ctx && ctx.state === 'suspended') {
+        ctx.resume().catch(() => {})
+      }
+    }
+    window.addEventListener('pointerdown', resumeAudio, { passive: true })
+    window.addEventListener('keydown', resumeAudio, { passive: true })
+    return () => {
+      window.removeEventListener('pointerdown', resumeAudio)
+      window.removeEventListener('keydown', resumeAudio)
+    }
+  }, [getAudioContext])
 
-  const pointerEmployee = useMemo(() => {
-    if (!employees.length) return null
-    const normalizedRotation = ((rotation % 360) + 360) % 360
-    const pointerAngle = (360 - normalizedRotation + 360) % 360
-    const slice = 360 / employees.length
-    const index = Math.floor(pointerAngle / slice) % employees.length
-    return employees[index]
-  }, [rotation, employees])
+  useEffect(() => {
+    employeesCountRef.current = employees.length
+  }, [employees.length])
+
+  useEffect(() => {
+    return () => {
+      if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current)
+      if (drawTimerRef.current) clearTimeout(drawTimerRef.current)
+      if (idleResumeRef.current) clearTimeout(idleResumeRef.current)
+      stopIdleMotion()
+      if (audioCtxRef.current) {
+        audioCtxRef.current.close().catch(() => {})
+      }
+    }
+  }, [stopIdleMotion])
 
   if (loading) {
     return (
@@ -183,15 +251,14 @@ useEffect(() => {
     )
   }
 
+  const scheduleMeta = config
+    ? `Fridays · ${config.cron} (${config.timezone})`
+    : 'Schedule unavailable'
+
   return (
     <div className="app-shell">
-      <header className="hero">
-        <h1>Friday Fortune Wheel</h1>
-        <Countdown target={config?.nextDrawAt} label="Next Draw" />
-      </header>
       {error && <p className="status-text status-text--alert">⚠️ {error}</p>}
-
-      <section className="content-grid">
+      <section className="main-grid">
         <div className="wheel-panel">
           <Wheel
             employees={employees}
@@ -200,8 +267,14 @@ useEffect(() => {
             highlightedId={activeWinner?.employee?.id}
           />
         </div>
-
-        <aside className="sidebar">
+        <div className="side-stack">
+          <div className="info-card">
+            <div>
+              <p className="info-card__label">Next Draw</p>
+              <Countdown target={config?.nextDrawAt} label="Auto spin in" />
+            </div>
+            <p className="info-card__meta">{scheduleMeta}</p>
+          </div>
           <div className="pointer-card">
             <div className="pointer-card__avatar">
               <span>{pointerEmployee?.firstName?.[0]?.toUpperCase() ?? '?'}</span>
@@ -214,7 +287,7 @@ useEffect(() => {
             </h3>
           </div>
           <WinnerList winners={displayedWinners} activeWinnerId={activeWinner?.id} />
-        </aside>
+        </div>
       </section>
     </div>
   )

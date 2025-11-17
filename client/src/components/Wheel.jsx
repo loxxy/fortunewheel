@@ -2,26 +2,16 @@ import PropTypes from 'prop-types'
 import './Wheel.css'
 
 const palette = [
-  '#0070F3',
+  '#1F6FEB',
+  '#3A86FF',
+  '#4CC9F0',
+  '#00B894',
+  '#FAD643',
+  '#F17300',
   '#FF6B6B',
-  '#34C759',
-  '#FFB020',
-  '#9B51E0',
-  '#FF8FA3',
-  '#50E3C2',
-  '#F5A623',
-  '#4A90E2',
-  '#F45D22',
-  '#8C54FF',
-  '#00C7BE',
-  '#EE2B47',
-  '#00A86B',
-  '#FF7A00',
-  '#2D9CDB',
-  '#D73A49',
-  '#1ABC9C',
-  '#F2994A',
-  '#BB6BD9',
+  '#E5383B',
+  '#9C36B5',
+  '#7C5EFB',
 ]
 
 const Wheel = ({ employees, rotation, isSpinning, highlightedId }) => {
@@ -74,6 +64,7 @@ const Wheel = ({ employees, rotation, isSpinning, highlightedId }) => {
   return (
     <div className="wheel-shell">
       <div className={`wheel ${isSpinning ? 'wheel--spinning' : ''}`} style={{ '--target-rotation': `${rotation}deg` }}>
+        <div className="wheel__rim" aria-hidden="true" />
         <svg viewBox={`0 0 ${size} ${size}`}>
           <defs>
             <filter id="shadow">
@@ -122,10 +113,16 @@ const Wheel = ({ employees, rotation, isSpinning, highlightedId }) => {
             })}
           </g>
         </svg>
+        <div className="wheel__hub" aria-hidden="true">
+          <div className="wheel__hub-inner">
+            <span>Friday Fortune</span>
+            <strong>Wheel</strong>
+          </div>
+        </div>
       </div>
       <div className="wheel-pointer">
-        <div className="wheel-pointer__stem" />
-        <div className="wheel-pointer__tip" />
+        <div className="wheel-pointer__base" />
+        <div className="wheel-pointer__arrow" />
       </div>
     </div>
   )
