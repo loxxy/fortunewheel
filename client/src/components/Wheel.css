@@ -1,0 +1,111 @@
+.wheel-shell {
+  position: relative;
+  --wheel-size: clamp(420px, 78vmin, 760px);
+  width: var(--wheel-size);
+  height: var(--wheel-size);
+  margin-inline: auto;
+}
+
+.wheel {
+  --target-rotation: 0deg;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.15), transparent 60%);
+  transition: transform 0s linear;
+  transform: rotate(var(--target-rotation));
+}
+
+.wheel--spinning {
+  transition: transform 5s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@media (max-height: 720px) {
+  .wheel-shell {
+    --wheel-size: clamp(280px, 60vmin, 540px);
+  }
+}
+
+@media (max-height: 620px) {
+  .wheel-shell {
+    --wheel-size: clamp(240px, 52vmin, 460px);
+  }
+}
+
+.wheel svg {
+  width: 100%;
+  height: 100%;
+}
+
+.wheel-pointer {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.wheel-pointer__stem {
+  width: 8px;
+  height: 50px;
+  background: #fff;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+  border-radius: 0 0 12px 12px;
+}
+
+.wheel-pointer__tip {
+  width: 0;
+  height: 0;
+  border-left: 18px solid transparent;
+  border-right: 18px solid transparent;
+  border-top: 26px solid #fff;
+  margin-top: -1px;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.15));
+}
+
+.wheel-segment__path {
+  stroke: rgba(6, 25, 56, 0.3);
+  stroke-width: 1.2;
+}
+
+.wheel-segment__path--glow {
+  filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.8));
+}
+
+.wheel-avatar {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+}
+
+.wheel-avatar__shape {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.9), rgba(255, 217, 92, 0.75));
+  border: 3px solid rgba(255, 255, 255, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #082146;
+  font-weight: 800;
+  font-size: 1.15rem;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  transform-origin: center;
+}
+
+.wheel-empty {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  border: 2px dashed rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.7);
+  text-align: center;
+  padding: 2rem;
+}

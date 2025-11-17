@@ -1,0 +1,33 @@
+{
+  "name": "fortunewheel",
+  "version": "1.0.0",
+  "description": "Weekly prize wheel experience for the office",
+  "main": "server/index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run server:dev\" \"npm run client:dev\"",
+    "server": "node server/index.js",
+    "server:dev": "nodemon --watch server --ext js,json server/index.js",
+    "client:dev": "npm run dev --prefix client",
+    "client:build": "npm run build --prefix client",
+    "client:preview": "npm run preview --prefix client",
+    "build": "npm run client:build",
+    "test": "echo \"No automated tests yet\""
+  },
+  "keywords": [],
+  "author": "Codex",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "cron-parser": "^5.4.0",
+    "csv-parse": "^6.1.0",
+    "csv-stringify": "^6.6.0",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "node-cron": "^4.2.1"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "nodemon": "^3.1.11"
+  }
+}
