@@ -451,7 +451,6 @@ useEffect(() => {
                 <div className="pointer-card__avatar">
                   <span>{pointerEmployee?.firstName?.[0]?.toUpperCase() ?? '?'}</span>
                 </div>
-                <div className="pointer-card__marker" aria-hidden="true" />
                 <h3 className="pointer-card__name">
                   {pointerEmployee
                     ? `${pointerEmployee.firstName ?? ''} ${pointerEmployee.lastName ?? ''}`.trim()
