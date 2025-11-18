@@ -26,7 +26,7 @@ const calculateParts = (target) => {
   return { label, isComplete: false }
 }
 
-const Countdown = ({ target, label }) => {
+const Countdown = ({ target, label = '' }) => {
   const [display, setDisplay] = useState(calculateParts(target))
 
   useEffect(() => {
@@ -50,7 +50,7 @@ const Countdown = ({ target, label }) => {
 
   return (
     <div className="countdown">
-      <div className="countdown__label">{label}</div>
+      {label && <div className="countdown__label">{label}</div>}
       <div className="countdown__value">{display.label}</div>
       <div className="countdown__hint">{formattedDate}</div>
     </div>

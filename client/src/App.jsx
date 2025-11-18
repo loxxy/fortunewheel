@@ -417,11 +417,8 @@ useEffect(() => {
           ) : (
             <>
               <div className="info-card">
-                <div>
-                  <p className="info-card__label">Next Draw</p>
-                  <Countdown target={config?.nextDrawAt} label="Auto spin in" />
-                </div>
-                <p className="info-card__meta">{scheduleMeta}</p>
+                <p className="info-card__label">Next Draw In</p>
+                <Countdown target={config?.nextDrawAt} />
               </div>
               <div className="pointer-card">
                 <div className="pointer-card__avatar">

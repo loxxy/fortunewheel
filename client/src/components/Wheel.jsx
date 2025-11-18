@@ -115,8 +115,9 @@ const Wheel = ({ employees, rotation, isSpinning, highlightedId }) => {
         </svg>
         <div className="wheel__hub" aria-hidden="true">
           <div className="wheel__hub-inner">
-            <span>Friday Fortune</span>
-            <strong>Wheel</strong>
+            <span>Wheel of</span>
+            <strong>Friday</strong>
+            <strong>Fortune</strong>
           </div>
         </div>
       </div>
