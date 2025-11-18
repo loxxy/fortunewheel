@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Wheel from './components/Wheel'
 import WinnerList from './components/WinnerList'
 import Countdown from './components/Countdown'
+import confetti from 'canvas-confetti'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -30,6 +31,7 @@ const request = async (path, options = {}) => {
 }
 
 const IDLE_INTERVAL_MS = 60
+const SPIN_DURATION_MS = 5200
 
 const App = () => {
   const [employees, setEmployees] = useState([])
@@ -41,6 +43,8 @@ const App = () => {
   const [isSpinning, setIsSpinning] = useState(false)
   const [displayedWinnerId, setDisplayedWinnerId] = useState(null)
   const [activeWinner, setActiveWinner] = useState(null)
+  const [isCelebrating, setIsCelebrating] = useState(false)
+  const [celebrationWinner, setCelebrationWinner] = useState(null)
   const spinTimeoutRef = useRef(null)
   const drawTimerRef = useRef(null)
   const idleIntervalRef = useRef(null)
@@ -49,6 +53,9 @@ const App = () => {
   const lastTickTimeRef = useRef(0)
   const lastPointerIndexRef = useRef(null)
   const employeesCountRef = useRef(0)
+  const celebrationTimeoutRef = useRef(null)
+  const rotationRef = useRef(0)
+  const spinAnimationFrameRef = useRef(null)
 
   const fetchEmployees = useCallback(async () => {
     const result = await request('/api/employees')
@@ -93,6 +100,93 @@ const App = () => {
     osc.stop(now + 0.1)
   }, [getAudioContext])
 
+  const fireConfetti = useCallback(() => {
+    const defaults = { spread: 70, ticks: 50, gravity: 0.9, decay: 0.9, startVelocity: 45 }
+    confetti({
+      ...defaults,
+      particleCount: 80,
+      scalar: 1.1,
+      origin: { y: 0.6 },
+    })
+    confetti({
+      ...defaults,
+      particleCount: 80,
+      scalar: 0.9,
+      origin: { y: 0.3 },
+      angle: 120,
+      startVelocity: 55,
+    })
+    confetti({
+      ...defaults,
+      particleCount: 80,
+      scalar: 0.9,
+      origin: { y: 0.3 },
+      angle: 60,
+      startVelocity: 55,
+    })
+  }, [])
+
+  const playCelebrationChime = useCallback(() => {
+    const ctx = getAudioContext()
+    if (!ctx) return
+    const base = ctx.currentTime
+    const notes = [784, 659, 523]
+    notes.forEach((freq, idx) => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.value = freq
+      const start = base + idx * 0.1
+      gain.gain.setValueAtTime(0, start)
+      gain.gain.linearRampToValueAtTime(0.4, start + 0.03)
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.7)
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start(start)
+      osc.stop(start + 0.8)
+    })
+  }, [getAudioContext])
+
+  const triggerCelebration = useCallback(
+    (winner) => {
+      if (!winner?.employee) return
+      setCelebrationWinner(winner.employee)
+      setIsCelebrating(true)
+      fireConfetti()
+      playCelebrationChime()
+      if (celebrationTimeoutRef.current) {
+        clearTimeout(celebrationTimeoutRef.current)
+      }
+      celebrationTimeoutRef.current = setTimeout(() => {
+        setIsCelebrating(false)
+        setCelebrationWinner(null)
+      }, 4500)
+    },
+    [fireConfetti, playCelebrationChime],
+  )
+
+  const animateRotation = useCallback((from, to, duration = SPIN_DURATION_MS) => {
+    if (spinAnimationFrameRef.current) {
+      cancelAnimationFrame(spinAnimationFrameRef.current)
+    }
+    const start = performance.now()
+    const totalDelta = to - from
+
+    const step = (now) => {
+      const progress = Math.min((now - start) / duration, 1)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      const value = from + totalDelta * eased
+      setRotation(value)
+      if (progress < 1) {
+        spinAnimationFrameRef.current = requestAnimationFrame(step)
+      } else {
+        spinAnimationFrameRef.current = null
+      }
+    }
+
+    spinAnimationFrameRef.current = requestAnimationFrame(step)
+  }, [])
+
   const startIdleMotion = useCallback(() => {
     if (idleIntervalRef.current || isSpinning) return
     idleIntervalRef.current = setInterval(() => {
@@ -128,15 +222,18 @@ const App = () => {
       const rotations = 4 + Math.floor(Math.random() * 3)
       setIsSpinning(true)
       setActiveWinner(winner)
-      setRotation((prev) => prev + rotations * 360 + (360 - targetAngle) + randomJitter)
+      const fromRotation = rotationRef.current
+      const toRotation = fromRotation + rotations * 360 + (360 - targetAngle) + randomJitter
+      animateRotation(fromRotation, toRotation, SPIN_DURATION_MS)
       spinTimeoutRef.current = setTimeout(() => {
         setIsSpinning(false)
+        triggerCelebration(winner)
         idleResumeRef.current = setTimeout(() => {
           startIdleMotion()
         }, 8000)
-      }, 5200)
+      }, SPIN_DURATION_MS)
     },
-    [employees, startIdleMotion, stopIdleMotion],
+    [employees, startIdleMotion, stopIdleMotion, triggerCelebration, animateRotation],
   )
 
   useEffect(() => {
@@ -173,10 +270,11 @@ const App = () => {
     if (Number.isNaN(target)) {
       return undefined
     }
-    const delay = Math.max(target - Date.now() + 2000, 0)
+    const delay = Math.max(target - Date.now(), 0)
     drawTimerRef.current = setTimeout(() => {
       fetchWinners()
       fetchConfig()
+      setTimeout(fetchWinners, 2000)
     }, delay)
     return () => {
       if (drawTimerRef.current) {
@@ -227,19 +325,25 @@ const App = () => {
     }
   }, [getAudioContext])
 
-  useEffect(() => {
-    employeesCountRef.current = employees.length
-  }, [employees.length])
+useEffect(() => {
+  employeesCountRef.current = employees.length
+}, [employees.length])
 
-  useEffect(() => {
-    return () => {
-      if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current)
-      if (drawTimerRef.current) clearTimeout(drawTimerRef.current)
-      if (idleResumeRef.current) clearTimeout(idleResumeRef.current)
-      stopIdleMotion()
-      if (audioCtxRef.current) {
-        audioCtxRef.current.close().catch(() => {})
-      }
+useEffect(() => {
+  rotationRef.current = rotation
+}, [rotation])
+
+useEffect(() => {
+  return () => {
+    if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current)
+    if (drawTimerRef.current) clearTimeout(drawTimerRef.current)
+    if (idleResumeRef.current) clearTimeout(idleResumeRef.current)
+    if (spinAnimationFrameRef.current) cancelAnimationFrame(spinAnimationFrameRef.current)
+    if (celebrationTimeoutRef.current) clearTimeout(celebrationTimeoutRef.current)
+    stopIdleMotion()
+    if (audioCtxRef.current) {
+      audioCtxRef.current.close().catch(() => {})
+    }
     }
   }, [stopIdleMotion])
 
@@ -257,6 +361,18 @@ const App = () => {
 
   return (
     <div className="app-shell">
+      {isCelebrating && (
+        <div className="celebration-overlay">
+          <div className="celebration-card">
+            <p>And the winner is…</p>
+            <h1>
+              {celebrationWinner
+                ? `${celebrationWinner.firstName} ${celebrationWinner.lastName ?? ''}`.trim()
+                : '—'}
+            </h1>
+          </div>
+        </div>
+      )}
       {error && <p className="status-text status-text--alert">⚠️ {error}</p>}
       <section className="main-grid">
         <div className="wheel-panel">
