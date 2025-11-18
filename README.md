@@ -1,32 +1,26 @@
 # Fortune Wheel
 
-Weekly rewards web experience for the office. Spin a fully animated wheel filled with every teammate's face, automatically choose a winner every Friday at 1:00 PM, and keep the last few winners visible on the big screen.
+Weekly rewards web experience for the office. Spin a fully animated wheel filled with every teammate's face, automatically choose a winner on a schedule, and keep the last few winners visible on the big screen.
 
 ## Features
 
-- SVG-based animated wheel that scales to ~40 employees with avatars and names.
-- Node/Express backend with CSV-driven employee roster + JSON winner history.
-- Scheduled draw powered by cron (defaults to 1:00 PM Fridays); the kiosk automatically animates and locks in at draw time.
-- Countdown timer and winner history so everyone knows what is happening next.
-- Responsive layout designed to stay legible on TV displays as well as laptops.
+- SVG-based animated wheel with avatars & readable initials that reshuffle after every spin.
+- Node/Express backend with CSV-driven employee roster + CSV winner history storage.
+- Cron-driven auto spin (defaults to 1:00 PM Fridays) or manual trigger; countdown shows the next scheduled draw.
+- Celebration overlay with confetti + chime; recent winners update only after the reveal.
+- Idle motion with ticking audio keeps the wheel alive between draws; layout scales up for TVs.
 
 ## Getting Started
 
 ```bash
-# install dependencies
-npm install
-
-# run backend + frontend together (nodemon + Vite)
-npm run dev
-
-# backend only
-npm run server
-
-# frontend only
-npm run client:dev
+npm install               # install root + client deps
+npm run dev               # run Express + Vite together
+npm run server            # backend only
+npm run client:dev        # frontend only
+npm run client:build      # production build (outputs client/dist)
 ```
 
-The Vite dev server proxies `/api/*` calls to the Express server (`localhost:4000`). Build the production assets with `npm run build` which runs `npm run client:build`.
+The Vite dev server proxies `/api/*` calls to `localhost:4000`. For production, `vite.config.js` uses relative asset paths so `client/dist` can be hosted from any static server.
 
 > The React client is tuned for kiosk mode: it fills the viewport, idles the wheel continuously, and only stops/announces when the backend scheduler picks a name.
 
@@ -37,9 +31,9 @@ Create a `.env` file at the project root to override defaults.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `PORT` | `4000` | Express server port |
-| `DRAW_CRON` | `0 0 13 * * FRI` | Cron pattern for the auto spin |
+| `DRAW_CRON` | `0 0 13 * * FRI` | Cron pattern for the auto spin (cron-parser syntax) |
 | `DRAW_TIMEZONE` | System timezone | Timezone for cron + countdown |
-| `WINNER_HISTORY_LIMIT` | `40` | How many winners to keep in `data.json` |
+| `WINNER_HISTORY_LIMIT` | `40` | How many winners to keep in `winners.csv` |
 | `REPEAT_COOLDOWN` | `3` | Number of recent winners excluded from the random pool |
 
 Frontend requests can also be pointed at a deployed API by setting `VITE_API_URL` before building the client. During local dev, the proxy handles it automatically.
@@ -51,7 +45,7 @@ Frontend requests can also be pointed at a deployed API by setting `VITE_API_URL
 
 ## Deployment Notes
 
-1. Deploy the Express server (render, fly.io, etc.) and keep `server/data/data.json` writable so scheduled spins can persist results.
+1. Deploy the Express server (render, fly.io, etc.) and keep `server/data/*.csv` writable so scheduled spins persist results.
 2. Build the client (`npm run client:build`) and host the `client/dist` folder via CDN or behind the same server (e.g., serve static files).
 3. Ensure the frontend can reach the API by setting `VITE_API_URL=https://your-domain/api`.
 
