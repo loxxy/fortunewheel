@@ -14,7 +14,6 @@ const WinnerList = ({ winners, headline, activeWinnerId }) => (
   <div className="winner-panel">
     <div className="winner-panel__header">
       <h3>{headline ?? 'Recent Winners'}</h3>
-      <span className="winner-panel__count">{winners.length}</span>
     </div>
     <ul className="winner-list">
       {winners.length ? (

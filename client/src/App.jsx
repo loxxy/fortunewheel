@@ -33,8 +33,19 @@ const request = async (path, options = {}) => {
 const IDLE_INTERVAL_MS = 60
 const SPIN_DURATION_MS = 5200
 
+const shuffleEmployees = (list) => {
+  if (!Array.isArray(list)) return []
+  const copy = [...list]
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[copy[i], copy[j]] = [copy[j], copy[i]]
+  }
+  return copy
+}
+
 const App = () => {
   const [employees, setEmployees] = useState([])
+  const [wheelEmployees, setWheelEmployees] = useState([])
   const [winners, setWinners] = useState([])
   const [visibleWinners, setVisibleWinners] = useState([])
   const [config, setConfig] = useState(null)
@@ -64,6 +75,12 @@ const App = () => {
     const result = await request('/api/employees')
     setEmployees(result.employees ?? [])
   }, [])
+
+  useEffect(() => {
+    if (employees.length) {
+      setWheelEmployees(shuffleEmployees(employees))
+    }
+  }, [employees])
 
   const fetchWinners = useCallback(async () => {
     const result = await request('/api/winners?limit=6')
@@ -150,6 +167,12 @@ const App = () => {
     })
   }, [getAudioContext])
 
+  const reshuffleWheel = useCallback(() => {
+    if (employees.length) {
+      setWheelEmployees(shuffleEmployees(employees))
+    }
+  }, [employees])
+
   const triggerCelebration = useCallback(
     (winner) => {
       if (!winner?.employee) return
@@ -164,9 +187,10 @@ const App = () => {
         setIsCelebrating(false)
         setCelebrationWinner(null)
         setIsPreReveal(false)
+        reshuffleWheel()
       }, 4500)
     },
-    [fireConfetti, playCelebrationChime],
+    [fireConfetti, playCelebrationChime, reshuffleWheel],
   )
 
   const animateRotation = useCallback((from, to, duration = SPIN_DURATION_MS) => {
@@ -210,8 +234,9 @@ const App = () => {
 
   const spinToWinner = useCallback(
     (winner) => {
-      if (!winner?.employee || !employees.length) return
-      const index = employees.findIndex((emp) => emp.id === winner.employee.id)
+      const currentWheel = wheelEmployees.length ? wheelEmployees : employees
+      if (!winner?.employee || !currentWheel.length) return
+      const index = currentWheel.findIndex((emp) => emp.id === winner.employee.id)
       if (index === -1) return
       if (spinTimeoutRef.current) {
         clearTimeout(spinTimeoutRef.current)
@@ -220,7 +245,7 @@ const App = () => {
         clearTimeout(idleResumeRef.current)
       }
       stopIdleMotion()
-      const sliceAngle = 360 / employees.length
+      const sliceAngle = 360 / currentWheel.length
       const randomJitter = (Math.random() - 0.5) * sliceAngle * 0.4
       const targetAngle = index * sliceAngle + sliceAngle / 2
       const rotations = 4 + Math.floor(Math.random() * 3)
@@ -237,7 +262,7 @@ const App = () => {
         }, 8000)
       }, SPIN_DURATION_MS)
     },
-    [employees, startIdleMotion, stopIdleMotion, triggerCelebration, animateRotation],
+    [employees, wheelEmployees, startIdleMotion, stopIdleMotion, triggerCelebration, animateRotation],
   )
 
   useEffect(() => {
@@ -288,14 +313,16 @@ const App = () => {
     }
   }, [config, fetchWinners, fetchConfig])
 
+  const wheelData = wheelEmployees.length ? wheelEmployees : employees
+
   const pointerInfo = useMemo(() => {
-    if (!employees.length) return { employee: null, index: null }
+    if (!wheelData.length) return { employee: null, index: null }
     const normalizedRotation = ((rotation % 360) + 360) % 360
     const pointerAngle = (360 - normalizedRotation + 360) % 360
-    const slice = 360 / employees.length
-    const index = Math.floor(pointerAngle / slice) % employees.length
-    return { employee: employees[index], index }
-  }, [rotation, employees])
+    const slice = 360 / wheelData.length
+    const index = Math.floor(pointerAngle / slice) % wheelData.length
+    return { employee: wheelData[index], index }
+  }, [rotation, wheelData])
   const pointerEmployee = pointerInfo.employee
 
   useEffect(() => {
@@ -341,9 +368,9 @@ const App = () => {
     }
   }, [getAudioContext])
 
-  useEffect(() => {
-    employeesCountRef.current = employees.length
-  }, [employees.length])
+useEffect(() => {
+  employeesCountRef.current = wheelData.length
+}, [wheelData.length])
 
   useEffect(() => {
     rotationRef.current = rotation
@@ -402,7 +429,7 @@ useEffect(() => {
       <section className="main-grid">
         <div className="wheel-panel">
           <Wheel
-            employees={employees}
+            employees={wheelData}
             rotation={rotation}
             isSpinning={isSpinning}
             highlightedId={activeWinner?.employee?.id}
