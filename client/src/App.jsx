@@ -36,6 +36,7 @@ const SPIN_DURATION_MS = 5200
 const App = () => {
   const [employees, setEmployees] = useState([])
   const [winners, setWinners] = useState([])
+  const [visibleWinners, setVisibleWinners] = useState([])
   const [config, setConfig] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -45,6 +46,7 @@ const App = () => {
   const [activeWinner, setActiveWinner] = useState(null)
   const [isCelebrating, setIsCelebrating] = useState(false)
   const [celebrationWinner, setCelebrationWinner] = useState(null)
+  const [isPreReveal, setIsPreReveal] = useState(false)
   const spinTimeoutRef = useRef(null)
   const drawTimerRef = useRef(null)
   const idleIntervalRef = useRef(null)
@@ -56,6 +58,7 @@ const App = () => {
   const celebrationTimeoutRef = useRef(null)
   const rotationRef = useRef(0)
   const spinAnimationFrameRef = useRef(null)
+  const pendingWinnersRef = useRef(null)
 
   const fetchEmployees = useCallback(async () => {
     const result = await request('/api/employees')
@@ -160,6 +163,7 @@ const App = () => {
       celebrationTimeoutRef.current = setTimeout(() => {
         setIsCelebrating(false)
         setCelebrationWinner(null)
+        setIsPreReveal(false)
       }, 4500)
     },
     [fireConfetti, playCelebrationChime],
@@ -272,6 +276,7 @@ const App = () => {
     }
     const delay = Math.max(target - Date.now(), 0)
     drawTimerRef.current = setTimeout(() => {
+      setIsPreReveal(true)
       fetchWinners()
       fetchConfig()
       setTimeout(fetchWinners, 2000)
@@ -282,8 +287,6 @@ const App = () => {
       }
     }
   }, [config, fetchWinners, fetchConfig])
-
-  const displayedWinners = useMemo(() => winners.slice(0, 3), [winners])
 
   const pointerInfo = useMemo(() => {
     if (!employees.length) return { employee: null, index: null }
@@ -297,9 +300,22 @@ const App = () => {
 
   useEffect(() => {
     if (!winners.length || !employees.length) return
-    if (winners[0].id === displayedWinnerId) return
-    setDisplayedWinnerId(winners[0].id)
-    spinToWinner(winners[0])
+    const latestWinner = winners[0]
+    if (!displayedWinnerId) {
+      setDisplayedWinnerId(latestWinner.id)
+      setActiveWinner((prev) => prev ?? latestWinner)
+      setVisibleWinners(winners.slice(0, 3))
+      return
+    }
+
+    if (latestWinner.id === displayedWinnerId) {
+      pendingWinnersRef.current = winners.slice(0, 3)
+      return
+    }
+
+    pendingWinnersRef.current = winners.slice(0, 3)
+    setDisplayedWinnerId(latestWinner.id)
+    spinToWinner(latestWinner)
   }, [winners, displayedWinnerId, spinToWinner, employees.length])
 
   useEffect(() => {
@@ -325,25 +341,34 @@ const App = () => {
     }
   }, [getAudioContext])
 
-useEffect(() => {
-  employeesCountRef.current = employees.length
-}, [employees.length])
+  useEffect(() => {
+    employeesCountRef.current = employees.length
+  }, [employees.length])
+
+  useEffect(() => {
+    rotationRef.current = rotation
+  }, [rotation])
 
 useEffect(() => {
-  rotationRef.current = rotation
-}, [rotation])
+  if (!isSpinning && !isCelebrating && !isPreReveal && pendingWinnersRef.current) {
+    setVisibleWinners(pendingWinnersRef.current)
+    pendingWinnersRef.current = null
+  } else if (!pendingWinnersRef.current && !visibleWinners.length && winners.length) {
+    setVisibleWinners(winners.slice(0, 3))
+  }
+}, [isSpinning, isCelebrating, isPreReveal, winners, visibleWinners.length])
 
-useEffect(() => {
-  return () => {
-    if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current)
-    if (drawTimerRef.current) clearTimeout(drawTimerRef.current)
-    if (idleResumeRef.current) clearTimeout(idleResumeRef.current)
-    if (spinAnimationFrameRef.current) cancelAnimationFrame(spinAnimationFrameRef.current)
-    if (celebrationTimeoutRef.current) clearTimeout(celebrationTimeoutRef.current)
-    stopIdleMotion()
-    if (audioCtxRef.current) {
-      audioCtxRef.current.close().catch(() => {})
-    }
+  useEffect(() => {
+    return () => {
+      if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current)
+      if (drawTimerRef.current) clearTimeout(drawTimerRef.current)
+      if (idleResumeRef.current) clearTimeout(idleResumeRef.current)
+      if (spinAnimationFrameRef.current) cancelAnimationFrame(spinAnimationFrameRef.current)
+      if (celebrationTimeoutRef.current) clearTimeout(celebrationTimeoutRef.current)
+      stopIdleMotion()
+      if (audioCtxRef.current) {
+        audioCtxRef.current.close().catch(() => {})
+      }
     }
   }, [stopIdleMotion])
 
@@ -384,25 +409,34 @@ useEffect(() => {
           />
         </div>
         <div className="side-stack">
-          <div className="info-card">
-            <div>
-              <p className="info-card__label">Next Draw</p>
-              <Countdown target={config?.nextDrawAt} label="Auto spin in" />
+          {isPreReveal ? (
+            <div className="info-card info-card--waiting">
+              <p className="info-card__label">Stand by</p>
+              <h3>Picking a winner…</h3>
             </div>
-            <p className="info-card__meta">{scheduleMeta}</p>
-          </div>
-          <div className="pointer-card">
-            <div className="pointer-card__avatar">
-              <span>{pointerEmployee?.firstName?.[0]?.toUpperCase() ?? '?'}</span>
-            </div>
-            <div className="pointer-card__marker" aria-hidden="true" />
-            <h3 className="pointer-card__name">
-              {pointerEmployee
-                ? `${pointerEmployee.firstName ?? ''} ${pointerEmployee.lastName ?? ''}`.trim()
-                : '—'}
-            </h3>
-          </div>
-          <WinnerList winners={displayedWinners} activeWinnerId={activeWinner?.id} />
+          ) : (
+            <>
+              <div className="info-card">
+                <div>
+                  <p className="info-card__label">Next Draw</p>
+                  <Countdown target={config?.nextDrawAt} label="Auto spin in" />
+                </div>
+                <p className="info-card__meta">{scheduleMeta}</p>
+              </div>
+              <div className="pointer-card">
+                <div className="pointer-card__avatar">
+                  <span>{pointerEmployee?.firstName?.[0]?.toUpperCase() ?? '?'}</span>
+                </div>
+                <div className="pointer-card__marker" aria-hidden="true" />
+                <h3 className="pointer-card__name">
+                  {pointerEmployee
+                    ? `${pointerEmployee.firstName ?? ''} ${pointerEmployee.lastName ?? ''}`.trim()
+                    : '—'}
+                </h3>
+              </div>
+              <WinnerList winners={visibleWinners} activeWinnerId={activeWinner?.id} />
+            </>
+          )}
         </div>
       </section>
     </div>
