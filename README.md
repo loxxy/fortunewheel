@@ -1,6 +1,6 @@
 # Fortune Wheel
 
-TV-friendly wheel of fortune for weekly employee rewards. Each company (slug) gets its own animated wheel, scheduled spins, and recent-winners rail so you can keep a lobby display on autopilot.
+Browser-based fortune wheel for employee lucky draws. Any slug (sales, ops, tech, etc.) becomes its own game with a rotating roster, scheduled or one-off spins, and a recent-winners feed that stays in sync across devices.
 
 ## Highlights
 
@@ -28,7 +28,7 @@ npm run dev          # runs Express (4000) + Vite (5173)
 Routes:
 
 - `http://localhost:5173/admin` – sign in with the password in `.env` and create a game by entering a slug (letters/numbers), picking a schedule (repeat every week/day/hour/minute or a single date/time), then pasting employee names.
-- `http://localhost:5173/<slug>` – kiosk UI for that game slug. Leave it open on the TV; it counts down and spins on schedule.
+- `http://localhost:5173/<slug>` – wheel UI for that game slug. Leave it open anywhere; it counts down and spins on schedule.
 
 > Until a game exists, the client shows “No game selected.” Create at least one slug in the admin panel first.
 
