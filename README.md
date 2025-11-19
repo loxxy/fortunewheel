@@ -24,6 +24,8 @@ The Vite dev server proxies `/api/*` calls to `localhost:4000`. For production, 
 
 > The React client is tuned for kiosk mode: it fills the viewport, idles the wheel continuously, and only stops/announces when the backend scheduler picks a name.
 
+> After starting the app, head to `/admin` to create your first game; until you do, `/:slug` routes will show “No game selected.”
+
 ## Configuration
 
 Create a `.env` file at the project root to override defaults.
@@ -31,23 +33,35 @@ Create a `.env` file at the project root to override defaults.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `PORT` | `4000` | Express server port |
-| `DRAW_CRON` | `0 0 13 * * FRI` | Cron pattern for the auto spin (cron-parser syntax) |
+| `DRAW_CRON` | `*/1 * * * *` | Default cron pattern for new games (cron-parser syntax) |
 | `DRAW_TIMEZONE` | System timezone | Timezone for cron + countdown |
-| `WINNER_HISTORY_LIMIT` | `40` | How many winners to keep in `winners.csv` |
+| `WINNER_HISTORY_LIMIT` | `40` | How many winners to keep per game |
 | `REPEAT_COOLDOWN` | `3` | Number of recent winners excluded from the random pool |
+| `ADMIN_PASSWORD` | `gameAdmin1@wof#` | Password for `/admin` interface & API |
 
 Frontend requests can also be pointed at a deployed API by setting `VITE_API_URL` before building the client. During local dev, the proxy handles it automatically.
 
 ## Data
 
-- `server/data/employees.csv` — comma separated roster with columns `id,firstName,lastName,role,avatar`. Update this file (up to ~40 rows) to change who appears on the wheel. The backend watches this file and reloads automatically.
-- `server/data/winners.csv` — maintained by the server after each draw (`id,employeeId,drawnAt,trigger`). Useful if you want to import past results elsewhere. Editing manually lets you reset history.
+- SQLite database at `server/data/wheel.db` stores everything. Tables:
+  - `games` – slug, display name, cron schedule, timezone.
+  - `employees` – roster per game.
+  - `winners` – historical draws per game.
+- The CLI admin interface lets you add/delete games and employees; the wheel UI automatically shuffles employee order every draw.
+
+## URLs
+
+- `/:gameSlug` – public wheel for the game slug you created (e.g. `/aas`). If no slug is provided you’ll see a “No game selected” message.
+- `/admin` – admin console (password prompt). From there you can:
+  - add/edit games (slug, cron expression, timezone),
+  - drop in a comma/newline separated list of employees to add in bulk,
+  - view cron info. All admin API calls require the password via Bearer token.
 
 ## Deployment Notes
 
-1. Deploy the Express server (render, fly.io, etc.) and keep `server/data/*.csv` writable so scheduled spins persist results.
-2. Build the client (`npm run client:build`) and host the `client/dist` folder via CDN or behind the same server (e.g., serve static files).
-3. Ensure the frontend can reach the API by setting `VITE_API_URL=https://your-domain/api`.
+1. Deploy the Express server (render, fly.io, etc.) and keep `server/data` writable – this is where the SQLite database (`wheel.db`) lives.
+2. Build the client (`npm run client:build`) and host the `client/dist` folder via CDN or behind the same server (e.g., serve static files). `vite.config.js` already uses relative asset paths.
+3. Ensure the frontend can reach the API by setting `VITE_API_URL=https://your-domain` (the React app calls `/api/...` behind the scenes).
 
 ## Testing
 
