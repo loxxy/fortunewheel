@@ -27,3 +27,14 @@ Browser-based fortune wheel for employee lucky draws. Any slug (sales, ops, tech
 4. Display `/<slug>` anywhere (TV, browser tab, etc.). The wheel keeps spinning, plays ticking audio, and automatically reveals winners when the scheduled draw hits.
 
 The backend stores all rosters, schedules, and winners in SQLite and exposes `/api/:slug/...` endpoints for the client. Winners include the name snapshot taken at draw time, so removing employees later never breaks history.
+
+## Production Run
+
+```bash
+npm install                   # root/server deps (run once)
+npm install --prefix client   # frontend deps (run once)
+npm run client:build          # emits client/dist
+npm run server                # serves API + built UI on PORT (default 4000)
+```
+
+Set any overrides in `.env` (e.g., `PORT`, `ADMIN_PASSWORD`, `VITE_CLIENT_PORT`) before starting the server. Once running, visit `/admin` to configure games and `/<slug>` to display a wheel.

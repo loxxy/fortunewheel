@@ -349,9 +349,10 @@ app.put('/api/admin/:slug/employees', requireAdmin, (req, res) => {
   res.json({ employees: updated })
 })
 
+const SPA_ROUTE = /^\/(?!api).*/
+
 if (HAS_CLIENT_BUILD) {
-  app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api')) return next()
+  app.get(SPA_ROUTE, (req, res, next) => {
     if (req.method !== 'GET') return next()
     const indexFile = path.join(CLIENT_DIST, 'index.html')
     if (fs.existsSync(indexFile)) {
@@ -366,7 +367,10 @@ app.use((req, res) => {
     return res.status(404).json({ message: 'Not found' })
   }
   if (HAS_CLIENT_BUILD) {
-    return res.sendFile(path.join(CLIENT_DIST, 'index.html'))
+    const indexFile = path.join(CLIENT_DIST, 'index.html')
+    if (fs.existsSync(indexFile)) {
+      return res.sendFile(indexFile)
+    }
   }
   return res.status(404).json({ message: 'Not found' })
 })
