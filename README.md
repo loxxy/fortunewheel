@@ -1,69 +1,80 @@
 # Fortune Wheel
 
-Weekly rewards web experience for the office. Spin a fully animated wheel filled with every teammate's face, automatically choose a winner on a schedule, and keep the last few winners visible on the big screen.
+TV-friendly wheel of fortune for weekly employee rewards. Each company (slug) gets its own animated wheel, scheduled spins, and recent-winners rail so you can keep a lobby display on autopilot.
 
-## Features
+## Highlights
 
-- SVG-based animated wheel with avatars & readable initials that reshuffle after every spin.
-- Node/Express backend with CSV-driven employee roster + CSV winner history storage.
-- Cron-driven auto spin (defaults to 1:00 PM Fridays) or manual trigger; countdown shows the next scheduled draw.
-- Celebration overlay with confetti + chime; recent winners update only after the reveal.
-- Idle motion with ticking audio keeps the wheel alive between draws; layout scales up for TVs.
+- **Always-on wheel** – SVG wheel idles smoothly, ticks every employee transition, and spins automatically at scheduled draws.
+- **Timed celebrations** – Winners trigger a confetti/chime overlay before their names move into the recent list.
+- **Multi-game support** – Every slug (e.g. `/aas`, `/office`) has its own roster, schedule, and history in SQLite.
+- **Admin console** – `/admin` offers a password-gated UI to create games, pick repeat vs. once-off spins, and bulk-manage employees via comma-separated lists.
+- **Snapshot winners** – Names are stored with the draw, so removing employees never retroactively “breaks” history.
 
-## Getting Started
+## Stack
+
+- Vite + React + Hooks for the kiosk UI
+- Express + better-sqlite3 for backend/API/scheduling
+- `node-cron` + `cron-parser` for repeat schedules
+- Canvas confetti + Web Audio for celebratory effects
+
+## Quick Start
 
 ```bash
-npm install               # install root + client deps
-npm run dev               # run Express + Vite together
-npm run server            # backend only
-npm run client:dev        # frontend only
-npm run client:build      # production build (outputs client/dist)
+npm install          # installs root + client deps
+cp .env.example .env # optional: tweak defaults
+npm run dev          # runs Express (4000) + Vite (5173)
 ```
 
-The Vite dev server proxies `/api/*` calls to `localhost:4000`. For production, `vite.config.js` uses relative asset paths so `client/dist` can be hosted from any static server.
+Routes:
 
-> The React client is tuned for kiosk mode: it fills the viewport, idles the wheel continuously, and only stops/announces when the backend scheduler picks a name.
+- `http://localhost:5173/admin` – sign in with the password in `.env` and create a game by entering a slug (letters/numbers), picking a schedule (repeat every week/day/hour/minute or a single date/time), then pasting employee names.
+- `http://localhost:5173/<slug>` – kiosk UI for that game slug. Leave it open on the TV; it counts down and spins on schedule.
 
-> After starting the app, head to `/admin` to create your first game; until you do, `/:slug` routes will show “No game selected.”
+> Until a game exists, the client shows “No game selected.” Create at least one slug in the admin panel first.
 
 ## Configuration
 
-Create a `.env` file at the project root to override defaults.
+All settings live in `.env` (sample in `.env.example`):
 
-| Variable | Default | Purpose |
+| Variable | Default | Notes |
 | --- | --- | --- |
-| `PORT` | `4000` | Express server port |
-| `DRAW_CRON` | `*/1 * * * *` | Default cron pattern for new games (cron-parser syntax) |
-| `DRAW_TIMEZONE` | System timezone | Timezone for cron + countdown |
-| `WINNER_HISTORY_LIMIT` | `40` | How many winners to keep per game |
-| `REPEAT_COOLDOWN` | `3` | Number of recent winners excluded from the random pool |
-| `ADMIN_PASSWORD` | `gameAdmin1@wof#` | Password for `/admin` interface & API |
+| `PORT` | `4000` | Express API |
+| `DRAW_CRON` | `0 0 13 * * FRI` | Default repeat cron for new games (13:00 Friday). One-time draws store their own timestamp. |
+| `DRAW_TIMEZONE` | `America/Toronto` | Timezone used for cron + countdowns |
+| `WINNER_HISTORY_LIMIT` | `40` | Per-game winners kept in SQLite |
+| `REPEAT_COOLDOWN` | `3` | Recent winners excluded from the random pool |
+| `ADMIN_PASSWORD` | `password` | Password for `/admin` + `Authorization: Bearer` |
+| `VITE_API_URL` | _(unset)_ | Set when hosting the client separately to point at the API origin |
 
-Frontend requests can also be pointed at a deployed API by setting `VITE_API_URL` before building the client. During local dev, the proxy handles it automatically.
+Frontend builds read `.env` variables prefixed with `VITE_`. Everything else configures the server.
 
-## Data
+## Data & Persistence
 
-- SQLite database at `server/data/wheel.db` stores everything. Tables:
-  - `games` – slug, display name, cron schedule, timezone.
-  - `employees` – roster per game.
-  - `winners` – historical draws per game.
-- The CLI admin interface lets you add/delete games and employees; the wheel UI automatically shuffles employee order every draw.
+SQLite lives at `server/data/wheel.db` (plus WAL/SHM files). Tables:
 
-## URLs
+- `games` – slug, cron, timezone, schedule metadata (repeat vs. once).
+- `employees` – per-game roster.
+- `winners` – past draws with the winner’s name/avatar snapshot.
 
-- `/:gameSlug` – public wheel for the game slug you created (e.g. `/aas`). If no slug is provided you’ll see a “No game selected” message.
-- `/admin` – admin console (password prompt). From there you can:
-  - add/edit games (slug, cron expression, timezone),
-  - drop in a comma/newline separated list of employees to add in bulk,
-  - view cron info. All admin API calls require the password via Bearer token.
+All admin actions write through the API, so no manual file edits are required. Roster replacements never delete winner history.
 
-## Deployment Notes
+## Building & Deploying
 
-1. Deploy the Express server (render, fly.io, etc.) and keep `server/data` writable – this is where the SQLite database (`wheel.db`) lives.
-2. Build the client (`npm run client:build`) and host the `client/dist` folder via CDN or behind the same server (e.g., serve static files). `vite.config.js` already uses relative asset paths.
-3. Ensure the frontend can reach the API by setting `VITE_API_URL=https://your-domain` (the React app calls `/api/...` behind the scenes).
+1. **Build the client:** `npm run client:build` → `client/dist`.
+2. **Deploy the server:** any Node host that allows writing to `server/data`. Mount `client/dist` as static assets or host separately (set `VITE_API_URL`).
+3. **Environment:** copy `.env.example`, set `ADMIN_PASSWORD`, and (optionally) override cron/timezone defaults.
+4. **Database:** keep `server/data/wheel.db*` writable. WAL files (`.wal`, `.shm`) are created automatically.
 
-## Testing
+## Testing & Verification
 
-- `npm run client:build` – validates the React bundle compiles without errors.
-- You can also `curl http://localhost:4000/api/employees` to verify the API.
+- `npm run client:build` – verifies the React bundle compiles (already run during this update).
+- Manual sanity check: `npm run dev`, open `/admin`, create a slug, add a few names, and confirm `/slug` shows the wheel + countdown.
+
+## Before Pushing to GitHub
+
+- Ensure `.env` contains the password you want (or omit it from commits).
+- Confirm `server/data/wheel.db*` are ignored (already handled in `.gitignore`).
+- Run `npm run client:build` (done) so you know the UI compiles cleanly.
+- Optionally delete any local-only CSVs (e.g. `server/data/employees.csv`) if you no longer need them; the app now uses SQLite exclusively.
+
+Happy spinning!
