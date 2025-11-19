@@ -1,5 +1,7 @@
 require('dotenv').config()
 
+const fs = require('fs')
+const path = require('path')
 const express = require('express')
 const cors = require('cors')
 const cron = require('node-cron')
@@ -30,9 +32,16 @@ const REPEAT_COOLDOWN = parseInt(process.env.REPEAT_COOLDOWN || '3', 10)
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'password'
 const RUN_ONCE_PLACEHOLDER_CRON = '0 0 * * *'
 
+const CLIENT_DIST = path.join(__dirname, '..', 'client', 'dist')
+const HAS_CLIENT_BUILD = fs.existsSync(CLIENT_DIST)
+
 const app = express()
 app.use(cors())
 app.use(express.json())
+
+if (HAS_CLIENT_BUILD) {
+  app.use(express.static(CLIENT_DIST))
+}
 
 const scheduledJobs = new Map()
 
@@ -340,8 +349,26 @@ app.put('/api/admin/:slug/employees', requireAdmin, (req, res) => {
   res.json({ employees: updated })
 })
 
+if (HAS_CLIENT_BUILD) {
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next()
+    if (req.method !== 'GET') return next()
+    const indexFile = path.join(CLIENT_DIST, 'index.html')
+    if (fs.existsSync(indexFile)) {
+      return res.sendFile(indexFile)
+    }
+    return next()
+  })
+}
+
 app.use((req, res) => {
-  res.status(404).json({ message: 'Not found' })
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({ message: 'Not found' })
+  }
+  if (HAS_CLIENT_BUILD) {
+    return res.sendFile(path.join(CLIENT_DIST, 'index.html'))
+  }
+  return res.status(404).json({ message: 'Not found' })
 })
 
 if (process.env.NODE_ENV !== 'test') {
