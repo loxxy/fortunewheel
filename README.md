@@ -1,5 +1,7 @@
 # Fortune Wheel
 
+![Fortune Wheel preview](assets/wheel-preview.png)
+
 Browser-based fortune wheel for employee lucky draws. Any slug (sales, ops, tech, etc.) becomes its own game with a rotating roster, scheduled or one-off spins, and a recent-winners feed that stays in sync across devices.
 
 ## Highlights
