@@ -56,7 +56,6 @@ if (HAS_CLIENT_BUILD) {
 }
 
 const scheduledJobs = new Map()
-const FORCE_HTTPS = process.env.ENABLE_HTTPS === 'true'
 
 function parseSchedulePayload(raw) {
   if (!raw) return null
