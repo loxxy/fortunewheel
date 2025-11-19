@@ -34,6 +34,7 @@ const RUN_ONCE_PLACEHOLDER_CRON = '0 0 * * *'
 
 const CLIENT_DIST = path.join(__dirname, '..', 'client', 'dist')
 const HAS_CLIENT_BUILD = fs.existsSync(CLIENT_DIST)
+const FORCE_HTTPS = process.env.ENABLE_HTTPS === 'true'
 
 const app = express()
 if (FORCE_HTTPS) {
