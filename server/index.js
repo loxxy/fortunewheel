@@ -36,6 +36,17 @@ const CLIENT_DIST = path.join(__dirname, '..', 'client', 'dist')
 const HAS_CLIENT_BUILD = fs.existsSync(CLIENT_DIST)
 
 const app = express()
+if (FORCE_HTTPS) {
+  app.set('trust proxy', true)
+  app.use((req, res, next) => {
+    if (!req.secure && req.get('x-forwarded-proto') !== 'https') {
+      const host = req.get('host') ?? ''
+      const target = `${req.originalUrl || '/'}`
+      return res.redirect(301, `https://${host}${target}`)
+    }
+    return next()
+  })
+}
 app.use(cors())
 app.use(express.json())
 
@@ -44,6 +55,7 @@ if (HAS_CLIENT_BUILD) {
 }
 
 const scheduledJobs = new Map()
+const FORCE_HTTPS = process.env.ENABLE_HTTPS === 'true'
 
 function parseSchedulePayload(raw) {
   if (!raw) return null
