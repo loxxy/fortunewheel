@@ -549,6 +549,9 @@ const GameView = () => {
             isSpinning={isSpinning}
             highlightedId={useBucketedWheel ? activeBucketId || activeWinner?.bucketId : activeWinner?.employee?.id}
           />
+          <button type="button" className="roster-fab" onClick={() => setIsRosterOpen(true)}>
+            Roster ({employees.length})
+          </button>
         </div>
         <div className="side-stack">
           {isPreReveal ? (
@@ -562,9 +565,6 @@ const GameView = () => {
                 <p className="info-card__label">Next Draw In</p>
                 <Countdown target={config?.nextDrawAt} />
               </div>
-              <button type="button" className="roster-trigger" onClick={() => setIsRosterOpen(true)}>
-                View roster ({employees.length})
-              </button>
               <div className="pointer-card">
                 <div className="pointer-card__avatar">
                   <span>{pointerEmployee?.firstName?.[0]?.toUpperCase() ?? '?'}</span>
