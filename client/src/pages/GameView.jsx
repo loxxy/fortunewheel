@@ -283,6 +283,23 @@ const GameView = () => {
   }, [rotation, wheelData])
   const pointerEmployee = pointerInfo.employee
 
+  const pointerDisplay = useMemo(() => {
+    if (!pointerEmployee) {
+      return { name: '—', initial: '?' }
+    }
+    if (pointerEmployee.isBucket && pointerEmployee.members?.length) {
+      const randomIndex = Math.floor(Math.random() * pointerEmployee.members.length)
+      const primary = pointerEmployee.members[randomIndex] || pointerEmployee.members[0]
+      const baseName = `${primary.firstName ?? ''} ${primary.lastName ?? ''}`.trim() || '—'
+      return {
+        name: baseName,
+        initial: primary.firstName?.[0]?.toUpperCase() ?? '?',
+      }
+    }
+    const name = `${pointerEmployee.firstName ?? ''} ${pointerEmployee.lastName ?? ''}`.trim() || '—'
+    return { name, initial: pointerEmployee.firstName?.[0]?.toUpperCase() ?? '?' }
+  }, [pointerEmployee])
+
   const spinToWinner = useCallback(
     (winner) => {
       const currentWheel = useBucketedWheel ? bucketedEmployees : wheelData.length ? wheelData : employees
@@ -567,12 +584,10 @@ const GameView = () => {
               </div>
               <div className="pointer-card">
                 <div className="pointer-card__avatar">
-                  <span>{pointerEmployee?.firstName?.[0]?.toUpperCase() ?? '?'}</span>
+                  <span>{pointerDisplay.initial}</span>
                 </div>
                 <h3 className="pointer-card__name">
-                  {pointerEmployee
-                    ? `${pointerEmployee.firstName ?? ''} ${pointerEmployee.lastName ?? ''}`.trim()
-                    : '—'}
+                  {pointerDisplay.name}
                 </h3>
               </div>
               <WinnerList winners={visibleWinners} activeWinnerId={activeWinner?.id} />
