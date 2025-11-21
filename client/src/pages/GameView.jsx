@@ -64,6 +64,7 @@ const GameView = () => {
   const [celebrationWinner, setCelebrationWinner] = useState(null)
   const [isPreReveal, setIsPreReveal] = useState(false)
   const [activeBucketId, setActiveBucketId] = useState(null)
+  const [isRosterOpen, setIsRosterOpen] = useState(false)
 
   const spinTimeoutRef = useRef(null)
   const drawTimerRef = useRef(null)
@@ -513,6 +514,32 @@ const GameView = () => {
           </div>
         </div>
       )}
+      {isRosterOpen && (
+        <div className="roster-modal" role="dialog" aria-modal="true">
+          <div className="roster-modal__card">
+            <div className="roster-modal__header">
+              <h3>Roster ({employees.length})</h3>
+              <button type="button" className="roster-modal__close" onClick={() => setIsRosterOpen(false)}>
+                ×
+              </button>
+            </div>
+            <div className="roster-modal__list">
+              {employees.length ? (
+                employees.map((emp) => (
+                  <div key={emp.id} className="roster-modal__row">
+                    <span className="roster-modal__initial">{emp.firstName?.[0] ?? '?'}</span>
+                    <span className="roster-modal__name">
+                      {`${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim()}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <p className="roster-modal__empty">No employees yet.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {error && <p className="status-text status-text--alert">⚠️ {error}</p>}
       <section className="main-grid">
         <div className="wheel-panel">
@@ -535,6 +562,9 @@ const GameView = () => {
                 <p className="info-card__label">Next Draw In</p>
                 <Countdown target={config?.nextDrawAt} />
               </div>
+              <button type="button" className="roster-trigger" onClick={() => setIsRosterOpen(true)}>
+                View roster ({employees.length})
+              </button>
               <div className="pointer-card">
                 <div className="pointer-card__avatar">
                   <span>{pointerEmployee?.firstName?.[0]?.toUpperCase() ?? '?'}</span>
@@ -546,26 +576,6 @@ const GameView = () => {
                 </h3>
               </div>
               <WinnerList winners={visibleWinners} activeWinnerId={activeWinner?.id} />
-              <div className="roster-card">
-                <div className="roster-card__header">
-                  <p className="roster-card__label">Roster</p>
-                  <span>{employees.length} names</span>
-                </div>
-                <div className="roster-card__list">
-                  {employees.length ? (
-                    employees.map((emp) => (
-                      <div key={emp.id} className="roster-card__row">
-                        <span className="roster-card__initial">{emp.firstName?.[0] ?? '?'}</span>
-                        <span className="roster-card__name">
-                          {`${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim()}
-                        </span>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="roster-card__empty">No employees yet.</p>
-                  )}
-                </div>
-              </div>
             </>
           )}
         </div>
