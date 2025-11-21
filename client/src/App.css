@@ -485,6 +485,12 @@
   font: inherit;
 }
 
+.admin-form input[type='date'],
+.admin-form input[type='time'] {
+  color-scheme: dark;
+  filter: invert(0) brightness(1.1);
+}
+
 .admin-form select {
   appearance: none;
   background-image: linear-gradient(45deg, transparent 50%, rgba(255, 255, 255, 0.6) 50%),
