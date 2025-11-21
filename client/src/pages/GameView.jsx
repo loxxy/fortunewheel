@@ -47,6 +47,21 @@ const GameView = () => {
   const { slug = 'default' } = useParams()
   const gameSlug = slug.toLowerCase()
   const API_BASE = import.meta.env.VITE_API_URL ?? ''
+  const { rosterUrl, isKioskMode } = useMemo(() => {
+    if (typeof window === 'undefined') {
+      return { rosterUrl: '', isKioskMode: false }
+    }
+    const origin = window.location.origin.replace(/\/$/, '')
+    const { pathname, search } = window.location
+    const params = new URLSearchParams(search)
+    const isKiosk = params.get('mode') === 'kiosk'
+    if (isKiosk) {
+      params.delete('mode')
+    }
+    const query = params.toString()
+    const pathWithQuery = query ? `${pathname}?${query}` : pathname
+    return { rosterUrl: `${origin}${pathWithQuery || '/'}`, isKioskMode: isKiosk }
+  }, [])
 
   const [employees, setEmployees] = useState([])
   const [wheelEmployees, setWheelEmployees] = useState([])
@@ -566,9 +581,21 @@ const GameView = () => {
             isSpinning={isSpinning}
             highlightedId={useBucketedWheel ? activeBucketId || activeWinner?.bucketId : activeWinner?.employee?.id}
           />
-          <button type="button" className="roster-fab" onClick={() => setIsRosterOpen(true)}>
-            Roster ({employees.length})
-          </button>
+          <div className="roster-fab-wrap">
+            {!isKioskMode && (
+              <button type="button" className="roster-fab" onClick={() => setIsRosterOpen(true)}>
+                Roster ({employees.length})
+              </button>
+            )}
+            {isKioskMode && rosterUrl ? (
+              <div className="roster-qr">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(rosterUrl)}`}
+                  alt="Open game URL"
+                />
+              </div>
+            ) : null}
+          </div>
         </div>
         <div className="side-stack">
           {isPreReveal ? (

@@ -151,9 +151,6 @@
 }
 
 .roster-fab {
-  position: absolute;
-  left: clamp(0.6rem, 2vw, 1.1rem);
-  bottom: clamp(0.6rem, 2vw, 1.1rem);
   border: 1px solid rgba(255, 255, 255, 0.2);
   background: rgba(2, 12, 32, 0.8);
   color: white;
@@ -164,6 +161,37 @@
   backdrop-filter: blur(6px);
 }
 
+.roster-fab-wrap {
+  position: absolute;
+  left: clamp(0.6rem, 2vw, 1.1rem);
+  bottom: clamp(0.6rem, 2vw, 1.1rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: flex-start;
+}
+
+.roster-qr {
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem;
+  gap: 0;
+  overflow: hidden;
+}
+
+.roster-qr img {
+  width: 48px;
+  height: 48px;
+  border-radius: 0;
+}
 .roster-modal {
   position: fixed;
   inset: 0;
