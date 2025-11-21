@@ -49,7 +49,7 @@ if (FORCE_HTTPS) {
   })
 }
 app.use(cors())
-app.use(express.json())
+app.use(express.json({ limit: '2mb' }))
 
 if (HAS_CLIENT_BUILD) {
   app.use(express.static(CLIENT_DIST))
@@ -357,6 +357,14 @@ app.put('/api/admin/:slug/employees', requireAdmin, (req, res) => {
       lastName: entry.lastName?.trim() || '',
     }))
     .filter((entry) => entry.firstName)
+  const seen = new Set()
+  for (const entry of cleaned) {
+    const key = `${entry.firstName.toLowerCase()}|${entry.lastName.toLowerCase()}`
+    if (seen.has(key)) {
+      return res.status(400).json({ message: `Duplicate name: ${entry.firstName} ${entry.lastName}`.trim() })
+    }
+    seen.add(key)
+  }
   const updated = replaceEmployees(game.slug, cleaned)
   res.json({ employees: updated })
 })

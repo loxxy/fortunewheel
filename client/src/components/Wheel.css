@@ -121,6 +121,10 @@
   stroke-width: 1.2;
 }
 
+.wheel-segment__path--bucket {
+  opacity: 0.9;
+}
+
 .wheel-segment__path--glow {
   filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.8));
 }
@@ -146,6 +150,11 @@
   font-size: 1.15rem;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   transform-origin: center;
+}
+
+.wheel-avatar__shape--bucket {
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.88), rgba(152, 197, 255, 0.85));
+  color: #082146;
 }
 
 .wheel-empty {

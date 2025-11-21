@@ -25,12 +25,7 @@ const defaultScheduleState = () => ({
   onceTime: '13:00',
 })
 
-const sanitizeBulkInput = (value) =>
-  value
-    .replace(/[\r\n]+/g, ' ')
-    .replace(/[^a-zA-Z0-9, ]+/g, '')
-    .replace(/ {2,}/g, ' ')
-    .trim()
+const sanitizeBulkInput = (value) => (value || '').replace(/\r\n/g, '\n')
 
 const safeParseJSON = (value) => {
   if (!value) return null
@@ -47,6 +42,19 @@ const padTime = (value) => String(value ?? '0').padStart(2, '0')
 const formatTimeFromDate = (date) => `${padTime(date.getHours())}:${padTime(date.getMinutes())}`
 
 const formatDateInput = (date) => `${date.getFullYear()}-${padTime(date.getMonth() + 1)}-${padTime(date.getDate())}`
+
+const parseRosterText = (text) =>
+  (text || '')
+    .split(/[,\n]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const parts = entry.split(/\s+/)
+      const firstName = parts.shift()
+      const lastName = parts.join(' ')
+      return { firstName, lastName }
+    })
+    .filter((entry) => entry.firstName)
 
 const normalizeCronParts = (cron = '') => {
   const parts = cron.trim().split(/\s+/).filter(Boolean)
@@ -293,13 +301,15 @@ const AdminPanel = () => {
   const [authError, setAuthError] = useState('')
   const [games, setGames] = useState([])
   const [selectedGame, setSelectedGame] = useState('')
-  const [newGameSlug, setNewGameSlug] = useState('')
-  const [newSchedule, setNewSchedule] = useState(() => defaultScheduleState())
+  const [formSlug, setFormSlug] = useState('')
   const [editingSchedule, setEditingSchedule] = useState(() => defaultScheduleState())
-  const [bulkEmployees, setBulkEmployees] = useState('')
-  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [roster, setRoster] = useState([])
+  const [bulkAddInput, setBulkAddInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [detailStatus, setDetailStatus] = useState('')
+  const [savingStatus, setSavingStatus] = useState('')
   const [error, setError] = useState('')
+  const [isCreating, setIsCreating] = useState(false)
 
   const authed = Boolean(secret)
 
@@ -358,7 +368,7 @@ const AdminPanel = () => {
     try {
       const result = await request('/api/admin/games')
       setGames(result.games ?? [])
-      if (!selectedGame && result.games?.length) {
+      if (!isCreating && !selectedGame && result.games?.length) {
         setSelectedGame(result.games[0].slug)
       }
       setError('')
@@ -367,58 +377,102 @@ const AdminPanel = () => {
     } finally {
       setLoading(false)
     }
-  }, [authed, request, selectedGame])
+  }, [authed, request, selectedGame, isCreating])
 
   useEffect(() => {
     fetchGames()
   }, [fetchGames])
 
-  const fetchEmployees = useCallback(async () => {
-    if (!authed || !selectedGame) return
+  const fetchEmployees = useCallback(
+    async (overrideSlug) => {
+      const targetSlug = overrideSlug || selectedGame
+      if (!authed || !targetSlug) return
+      setDetailStatus('Loading game details…')
     try {
-      const result = await request(`/api/admin/${selectedGame}/employees`)
+      const result = await request(`/api/admin/${targetSlug}/employees`)
       const list = result.employees ?? []
-      const combined = list.map((emp) => `${emp.firstName} ${emp.lastName}`.trim()).join(', ')
-      setBulkEmployees(sanitizeBulkInput(combined))
+      setRoster(list)
+      setBulkAddInput('')
+      setDetailStatus('')
     } catch (err) {
       setError(err.message)
+      setDetailStatus('')
     }
-  }, [authed, request, selectedGame])
+    },
+    [authed, request, selectedGame],
+  )
 
   useEffect(() => {
-    fetchEmployees()
-  }, [fetchEmployees])
-
-  const handleCreateGame = async (event) => {
-    event.preventDefault()
-    if (!newGameSlug) return
-    try {
-      const scheduleRequest = buildScheduleRequest(newSchedule)
-      await request('/api/admin/games', {
-        method: 'POST',
-        body: JSON.stringify({ slug: newGameSlug, ...scheduleRequest }),
-      })
-      setNewGameSlug('')
-      setNewSchedule(defaultScheduleState())
-      setShowCreateForm(false)
-      fetchGames()
-    } catch (err) {
-      setError(err.message)
+    if (!isCreating) {
+      fetchEmployees()
     }
+  }, [fetchEmployees, isCreating])
+
+  const handleAddBulk = () => {
+    const entries = parseRosterText(bulkAddInput)
+    if (!entries.length) {
+      setError('Enter at least one name to add.')
+      return
+    }
+    const timestamp = Date.now()
+    const existingKeys = new Set(
+      roster.map((emp) => `${emp.firstName?.toLowerCase() || ''}|${emp.lastName?.toLowerCase() || ''}`),
+    )
+    const localKeys = new Set()
+    for (const entry of entries) {
+      const key = `${entry.firstName.toLowerCase()}|${entry.lastName.toLowerCase()}`
+      if (existingKeys.has(key) || localKeys.has(key)) {
+        const name = `${entry.firstName} ${entry.lastName}`.trim()
+        setError(`Duplicate name: ${name}`)
+        if (typeof window !== 'undefined') {
+          window.alert(`Duplicate name: ${name}`)
+        }
+        return
+      }
+      localKeys.add(key)
+    }
+    const enriched = entries.map((entry, idx) => ({
+      ...entry,
+      id: entry.id || `local-${timestamp}-${idx}`,
+    }))
+    setRoster((prev) => [...prev, ...enriched])
+    setBulkAddInput('')
+    setError('')
+  }
+
+  const handleRemoveEmployee = (index) => {
+    setRoster((prev) => prev.filter((_, idx) => idx !== index))
+  }
+
+
+  const handleSelectGame = (slug) => {
+    setIsCreating(false)
+    setError('')
+    setSelectedGame(slug)
+    setFormSlug(slug)
+    setDetailStatus('Loading game details…')
+    setRoster([])
+    setEditingSchedule(defaultScheduleState())
   }
 
   const currentGame = useMemo(
-    () => games.find((game) => game.slug === selectedGame),
-    [games, selectedGame],
+    () => (!isCreating ? games.find((game) => game.slug === selectedGame) : null),
+    [games, selectedGame, isCreating],
   )
 
   useEffect(() => {
     if (currentGame) {
       setEditingSchedule(deriveScheduleState(currentGame))
+      setFormSlug(currentGame.slug)
+      setDetailStatus('')
+    } else if (isCreating) {
+      setEditingSchedule(defaultScheduleState())
+      setFormSlug('')
+      setDetailStatus('Ready to create a new game.')
     } else {
       setEditingSchedule(defaultScheduleState())
     }
-  }, [currentGame])
+  }, [currentGame, isCreating])
 
   if (!authed) {
     return (
@@ -455,11 +509,14 @@ const AdminPanel = () => {
             localStorage.removeItem(STORAGE_KEY)
             setSecret('')
             setGames([])
-            setBulkEmployees('')
+            setRoster([])
+            setBulkAddInput('')
             setSelectedGame('')
-            setNewGameSlug('')
-            setNewSchedule(defaultScheduleState())
+            setFormSlug('')
             setEditingSchedule(defaultScheduleState())
+            setIsCreating(false)
+            setDetailStatus('')
+            setSavingStatus('')
           }}
         >
           Sign Out
@@ -474,18 +531,16 @@ const AdminPanel = () => {
             <h2>Games</h2>
             <button
               type="button"
-              onClick={() =>
-                setShowCreateForm((prev) => {
-                  const next = !prev
-                  if (next) {
-                    setNewGameSlug('')
-                    setNewSchedule(defaultScheduleState())
-                  }
-                  return next
-                })
-              }
+              onClick={() => {
+                setIsCreating(true)
+                setSelectedGame('')
+                setFormSlug('')
+                setRoster([])
+                setEditingSchedule(defaultScheduleState())
+                setDetailStatus('Ready to create a new game.')
+              }}
             >
-              {showCreateForm ? 'Close' : 'Create game'}
+              Create game
             </button>
           </div>
           {loading ? (
@@ -496,8 +551,8 @@ const AdminPanel = () => {
                 <li key={game.slug}>
                   <button
                     type="button"
-                    className={game.slug === selectedGame ? 'admin-list__item--active' : ''}
-                    onClick={() => setSelectedGame(game.slug)}
+                    className={game.slug === selectedGame && !isCreating ? 'admin-list__item--active' : ''}
+                    onClick={() => handleSelectGame(game.slug)}
                   >
                     <strong>{game.slug}</strong>
                   </button>
@@ -505,85 +560,134 @@ const AdminPanel = () => {
               ))}
             </ul>
           )}
-          {showCreateForm && (
-            <form className="admin-form" onSubmit={handleCreateGame}>
-              <h3>New Game</h3>
-              <input
-                value={newGameSlug}
-                onChange={(event) => setNewGameSlug(event.target.value)}
-                placeholder="Game Name (letters only)"
-                required
-              />
-              <ScheduleControls schedule={newSchedule} onChange={setNewSchedule} name="new-schedule" />
-              <button type="submit">Create Game</button>
-            </form>
-          )}
         </div>
 
         <div className="admin-card admin-card--detail">
-          {currentGame ? (
-            <>
-              <form
-                className="admin-form"
-                onSubmit={async (event) => {
-                  event.preventDefault()
-                  if (!currentGame.slug) return
-                  const entries = bulkEmployees
-                    .split(',')
-                    .map((entry) => entry.trim())
-                    .filter(Boolean)
-                    .map((entry) => {
-                      const parts = entry.split(/\s+/)
-                      const firstName = parts.shift()
-                      const lastName = parts.join(' ')
-                      return { firstName, lastName }
-                    })
-                    .filter((entry) => entry.firstName)
-                  try {
-                    const scheduleRequest = buildScheduleRequest(editingSchedule)
-                    await request(`/api/admin/${currentGame.slug}/config`, {
-                      method: 'PATCH',
-                      body: JSON.stringify(scheduleRequest),
-                    })
-                    await request(`/api/admin/${currentGame.slug}/employees`, {
-                      method: 'PUT',
-                      body: JSON.stringify({ employees: entries }),
-                    })
-                    await Promise.all([fetchGames(), fetchEmployees()])
-                    setError('')
-                  } catch (err) {
-                    setError(err.message)
-                  }
-                }}
-              >
-                <h3>Game Settings · {currentGame.slug}</h3>
-                <div className="admin-form__inline">
-                  <ScheduleControls
-                    schedule={editingSchedule}
-                    onChange={setEditingSchedule}
-                    name="edit-schedule"
-                  />
+          {isCreating || currentGame ? (
+            <div className="admin-triple">
+              <div className="admin-card admin-card--panel">
+                <form
+                  className="admin-form"
+                  onSubmit={async (event) => {
+                    event.preventDefault()
+                    const targetSlug = isCreating ? formSlug.trim().toLowerCase() : currentGame?.slug
+                    if (!targetSlug) {
+                      setError('Enter a game name.')
+                      return
+                    }
+                    if (!editingSchedule) return
+                    setSavingStatus(isCreating ? 'Creating game…' : 'Saving game…')
+                    try {
+                      const scheduleRequest = buildScheduleRequest(editingSchedule)
+                      if (isCreating) {
+                        await request('/api/admin/games', {
+                          method: 'POST',
+                          body: JSON.stringify({ slug: targetSlug, ...scheduleRequest }),
+                        })
+                      } else if (currentGame?.slug) {
+                        await request(`/api/admin/${currentGame.slug}/config`, {
+                          method: 'PATCH',
+                          body: JSON.stringify(scheduleRequest),
+                        })
+                      }
+                      await request(`/api/admin/${targetSlug}/employees`, {
+                        method: 'PUT',
+                        body: JSON.stringify({
+                          employees: roster.map((emp) => ({
+                            firstName: emp.firstName,
+                            lastName: emp.lastName,
+                          })),
+                        }),
+                      })
+                      await fetchGames()
+                      await fetchEmployees(targetSlug)
+                      setSelectedGame(targetSlug)
+                      setIsCreating(false)
+                      setFormSlug(targetSlug)
+                      setDetailStatus('')
+                      setError('')
+                    } catch (err) {
+                      setError(err.message)
+                    } finally {
+                      setSavingStatus('')
+                    }
+                  }}
+                >
+                  <h3>{isCreating ? 'Create Game' : `Game Settings · ${currentGame?.slug}`}</h3>
+                  <div className="admin-form__group">
+                    <label htmlFor="game-slug">Game name</label>
+                    <input
+                      id="game-slug"
+                      value={formSlug}
+                      disabled={!isCreating}
+                      onChange={(event) => setFormSlug(event.target.value)}
+                      placeholder="e.g. sales"
+                      required
+                    />
+                  </div>
+                  <div className="admin-form__inline">
+                    <ScheduleControls
+                      schedule={editingSchedule}
+                      onChange={setEditingSchedule}
+                      name="edit-schedule"
+                    />
+                  </div>
+                  {detailStatus && <p className="status-text">{detailStatus}</p>}
+                  {savingStatus && <p className="status-text">{savingStatus}</p>}
+                  <button type="submit" disabled={Boolean(savingStatus)}>
+                    {isCreating ? 'Create Game' : 'Save Game'}
+                  </button>
+                </form>
+              </div>
+
+              <div className="admin-card admin-card--roster">
+                <div className="admin-card__header">
+                  <h3>Employee List · {formSlug || currentGame?.slug || 'new'}</h3>
+                  <span>{roster.length} names</span>
+                </div>
+                <div className="roster-table">
+                  {roster.length ? (
+                    roster.map((emp, index) => (
+                      <div key={emp.id || `emp-${index}`} className="roster-table__row">
+                        <span className="roster-table__index">{index + 1}.</span>
+                        <span className="roster-table__name">
+                          {`${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim()}
+                        </span>
+                        <button
+                          type="button"
+                          className="roster-table__delete"
+                          aria-label={`Remove ${emp.firstName}`}
+                          onClick={() => handleRemoveEmployee(index)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="roster-table__empty">No employees yet.</p>
+                  )}
                 </div>
                 <div className="admin-form__group">
-                  <label htmlFor="bulk-employees">Employees</label>
+                  <label htmlFor="bulk-add">Bulk add (comma or newline separated)</label>
                   <textarea
-                    id="bulk-employees"
-                    rows={6}
-                    value={bulkEmployees}
-                    onChange={(event) => setBulkEmployees(sanitizeBulkInput(event.target.value))}
+                    id="bulk-add"
+                    rows={4}
+                    value={bulkAddInput}
+                    onChange={(event) => setBulkAddInput(event.target.value)}
                     placeholder="Jane Doe, John Smith, Maria"
                   />
-                  <p className="schedule-builder__hint">
-                    Enter comma separated first/last names. Existing winners remain untouched.
-                  </p>
+                  <div className="admin-form__inline">
+                    <button type="button" className="admin-form__button" onClick={handleAddBulk}>
+                      Add to List
+                    </button>
+                  </div>
                 </div>
-                <button type="submit">Save Changes</button>
-              </form>
-            </>
+              </div>
+            </div>
           ) : (
             <div className="admin-empty-state">
               <h2>Select a game</h2>
-              <p>Pick a game from the list to edit its schedule and roster.</p>
+              <p>Pick a game from the list to edit its schedule and roster, or create a new one.</p>
             </div>
           )}
         </div>

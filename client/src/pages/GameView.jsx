@@ -7,6 +7,8 @@ import Countdown from '../components/Countdown'
 
 const IDLE_INTERVAL_MS = 60
 const SPIN_DURATION_MS = 5200
+const MAX_WHEEL_SLICES = 120
+const MAX_BUCKETS = 80
 
 const shuffleEmployees = (list) => {
   if (!Array.isArray(list)) return []
@@ -16,6 +18,29 @@ const shuffleEmployees = (list) => {
     ;[copy[i], copy[j]] = [copy[j], copy[i]]
   }
   return copy
+}
+
+const buildBuckets = (list) => {
+  if (!Array.isArray(list) || !list.length) return []
+  const chunkSize = Math.max(1, Math.ceil(list.length / MAX_BUCKETS))
+  const buckets = []
+  for (let i = 0; i < list.length; i += chunkSize) {
+    const members = list.slice(i, i + chunkSize)
+    const startIndex = i + 1
+    const endIndex = Math.min(list.length, i + members.length)
+    const label = members.length === 1 ? members[0].firstName : `#${startIndex}–${endIndex}`
+    const bucketId = `bucket-${startIndex}-${endIndex}`
+    buckets.push({
+      id: bucketId,
+      firstName: label,
+      lastName: members.length > 1 ? `${members.length} names` : members[0].lastName,
+      label,
+      bucketSize: members.length,
+      members,
+      isBucket: members.length > 1,
+    })
+  }
+  return buckets
 }
 
 const GameView = () => {
@@ -38,6 +63,7 @@ const GameView = () => {
   const [isCelebrating, setIsCelebrating] = useState(false)
   const [celebrationWinner, setCelebrationWinner] = useState(null)
   const [isPreReveal, setIsPreReveal] = useState(false)
+  const [activeBucketId, setActiveBucketId] = useState(null)
 
   const spinTimeoutRef = useRef(null)
   const drawTimerRef = useRef(null)
@@ -169,7 +195,9 @@ const GameView = () => {
   const reshuffleWheel = useCallback(() => {
     setWheelEmployees((prev) => {
       if (!employees.length) return prev
-      return shuffleEmployees(employees)
+      const usingBuckets = employees.length > MAX_WHEEL_SLICES
+      const source = usingBuckets ? buildBuckets(employees) : employees
+      return shuffleEmployees(source)
     })
   }, [employees])
 
@@ -232,7 +260,17 @@ const GameView = () => {
     }
   }, [])
 
-  const wheelData = wheelEmployees.length ? wheelEmployees : employees
+  const useBucketedWheel = employees.length > MAX_WHEEL_SLICES
+  const bucketedEmployees = useMemo(
+    () => (useBucketedWheel ? buildBuckets(employees) : []),
+    [useBucketedWheel, employees],
+  )
+
+  const wheelData = useBucketedWheel
+    ? bucketedEmployees
+    : wheelEmployees.length
+    ? wheelEmployees
+    : employees
 
   const pointerInfo = useMemo(() => {
     if (!wheelData.length) return { employee: null, index: null }
@@ -246,9 +284,12 @@ const GameView = () => {
 
   const spinToWinner = useCallback(
     (winner) => {
-      const currentWheel = wheelData.length ? wheelData : employees
+      const currentWheel = useBucketedWheel ? bucketedEmployees : wheelData.length ? wheelData : employees
       if (!winner?.employee || !currentWheel.length) return
-      const index = currentWheel.findIndex((emp) => emp.id === winner.employee.id)
+      const targetId = winner.employee.id
+      const index = useBucketedWheel
+        ? currentWheel.findIndex((bucket) => bucket.members?.some((member) => member.id === targetId))
+        : currentWheel.findIndex((emp) => emp.id === targetId)
       if (index === -1) return
       if (spinTimeoutRef.current) {
         clearTimeout(spinTimeoutRef.current)
@@ -262,7 +303,9 @@ const GameView = () => {
       const targetAngle = index * sliceAngle + sliceAngle / 2
       const rotations = 4 + Math.floor(Math.random() * 3)
       setIsSpinning(true)
-      setActiveWinner(winner)
+      const bucketId = useBucketedWheel ? currentWheel[index]?.id || null : null
+      setActiveWinner(bucketId ? { ...winner, bucketId } : winner)
+      setActiveBucketId(bucketId)
       const fromRotation = rotationRef.current
       const toRotation = fromRotation + rotations * 360 + (360 - targetAngle) + randomJitter
       animateRotation(fromRotation, toRotation, SPIN_DURATION_MS)
@@ -274,7 +317,16 @@ const GameView = () => {
         }, 8000)
       }, SPIN_DURATION_MS)
     },
-    [wheelData, employees, stopIdleMotion, animateRotation, triggerCelebration, startIdleMotion],
+    [
+      wheelData,
+      employees,
+      useBucketedWheel,
+      bucketedEmployees,
+      stopIdleMotion,
+      animateRotation,
+      triggerCelebration,
+      startIdleMotion,
+    ],
   )
 
   useEffect(() => {
@@ -287,6 +339,7 @@ const GameView = () => {
     setVisibleWinners([])
     setDisplayedWinnerId(null)
     setActiveWinner(null)
+    setActiveBucketId(null)
     setIsPreReveal(false)
     pendingWinnersRef.current = null
   }, [gameSlug])
@@ -400,6 +453,12 @@ const GameView = () => {
   }, [rotation])
 
   useEffect(() => {
+    if (!useBucketedWheel && activeBucketId) {
+      setActiveBucketId(null)
+    }
+  }, [useBucketedWheel, activeBucketId])
+
+  useEffect(() => {
     if (!isSpinning && !isCelebrating && !isPreReveal && pendingWinnersRef.current) {
       setVisibleWinners(pendingWinnersRef.current)
       pendingWinnersRef.current = null
@@ -461,7 +520,7 @@ const GameView = () => {
             employees={wheelData}
             rotation={rotation}
             isSpinning={isSpinning}
-            highlightedId={activeWinner?.employee?.id}
+            highlightedId={useBucketedWheel ? activeBucketId || activeWinner?.bucketId : activeWinner?.employee?.id}
           />
         </div>
         <div className="side-stack">
@@ -487,6 +546,26 @@ const GameView = () => {
                 </h3>
               </div>
               <WinnerList winners={visibleWinners} activeWinnerId={activeWinner?.id} />
+              <div className="roster-card">
+                <div className="roster-card__header">
+                  <p className="roster-card__label">Roster</p>
+                  <span>{employees.length} names</span>
+                </div>
+                <div className="roster-card__list">
+                  {employees.length ? (
+                    employees.map((emp) => (
+                      <div key={emp.id} className="roster-card__row">
+                        <span className="roster-card__initial">{emp.firstName?.[0] ?? '?'}</span>
+                        <span className="roster-card__name">
+                          {`${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim()}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="roster-card__empty">No employees yet.</p>
+                  )}
+                </div>
+              </div>
             </>
           )}
         </div>

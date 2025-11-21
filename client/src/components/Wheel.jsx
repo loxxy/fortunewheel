@@ -27,7 +27,9 @@ const Wheel = ({ employees, rotation, isSpinning, highlightedId }) => {
   const radius = size / 2 - 30
   const center = size / 2
   const sliceAngle = 360 / employees.length
-  const avatarSize = 56
+  const avatarSize = employees.length > 160 ? 36 : employees.length > 120 ? 44 : employees.length > 80 ? 50 : 56
+  const labelFontSize =
+    employees.length > 160 ? '0.65rem' : employees.length > 120 ? '0.78rem' : employees.length > 80 ? '0.95rem' : '1.15rem'
   const normalizedRotation = ((rotation % 360) + 360) % 360
 
   const polarToCartesian = (angle, r = radius) => {
@@ -83,15 +85,22 @@ const Wheel = ({ employees, rotation, isSpinning, highlightedId }) => {
               const transform = isFlipped
                 ? `${transformBase} scale(-1, 1) translate(0, -${radius * 0.72})`
                 : `${transformBase} translate(0, -${radius * 0.72})`
-              const initial = employee.firstName?.slice(0, 1)?.toUpperCase() ?? '?'
+              const label = employee.label || employee.firstName || '?'
+              const initial = label.slice(0, 3).toUpperCase() || '?'
               const avatarPoint = polarToCartesian(midAngle, radius * 0.78)
+              const pathClass = isHighlighted
+                ? 'wheel-segment__path wheel-segment__path--glow'
+                : employee.isBucket
+                ? 'wheel-segment__path wheel-segment__path--bucket'
+                : 'wheel-segment__path'
 
               return (
                 <g key={employee.id} className="wheel-segment">
                   <path
                     d={describeSlicePath(startAngle, endAngle)}
                     fill={color}
-                    className={isHighlighted ? 'wheel-segment__path wheel-segment__path--glow' : 'wheel-segment__path'}
+                    className={pathClass}
+                    title={employee.isBucket ? `${employee.bucketSize} names` : `${employee.firstName} ${employee.lastName || ''}`}
                   />
                   <foreignObject
                     x={avatarPoint.x - avatarSize / 2}
@@ -101,8 +110,8 @@ const Wheel = ({ employees, rotation, isSpinning, highlightedId }) => {
                   >
                     <div className="wheel-avatar">
                       <div
-                        className="wheel-avatar__shape"
-                        style={{ transform: `rotate(${-normalizedRotation}deg)` }}
+                        className={employee.isBucket ? 'wheel-avatar__shape wheel-avatar__shape--bucket' : 'wheel-avatar__shape'}
+                        style={{ transform: `rotate(${-normalizedRotation}deg)`, fontSize: labelFontSize }}
                       >
                         <span>{initial}</span>
                       </div>
@@ -135,6 +144,9 @@ Wheel.propTypes = {
       firstName: PropTypes.string.isRequired,
       lastName: PropTypes.string,
       avatar: PropTypes.string,
+      label: PropTypes.string,
+      isBucket: PropTypes.bool,
+      bucketSize: PropTypes.number,
     }),
   ).isRequired,
   rotation: PropTypes.number.isRequired,
