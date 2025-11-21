@@ -152,6 +152,15 @@
   transform-origin: center;
 }
 
+@media (max-width: 680px) {
+  .wheel-avatar__shape span {
+    display: none;
+  }
+  .wheel-avatar__shape {
+    border-width: 2px;
+  }
+}
+
 .wheel-avatar__shape--bucket {
   background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.88), rgba(152, 197, 255, 0.85));
   color: #082146;
