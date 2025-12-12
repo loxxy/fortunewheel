@@ -11,6 +11,7 @@ function ensureGameScheduleColumns() {
   const hasScheduleType = columns.some((column) => column.name === 'schedule_type')
   const hasSchedulePayload = columns.some((column) => column.name === 'schedule_payload')
   const hasAllowRepeat = columns.some((column) => column.name === 'allow_repeat_winners')
+  const hasGifts = columns.some((column) => column.name === 'gifts')
   if (!hasScheduleType) {
     db.prepare("ALTER TABLE games ADD COLUMN schedule_type TEXT DEFAULT 'repeat'").run()
   }
@@ -19,6 +20,9 @@ function ensureGameScheduleColumns() {
   }
   if (!hasAllowRepeat) {
     db.prepare('ALTER TABLE games ADD COLUMN allow_repeat_winners INTEGER DEFAULT 0').run()
+  }
+  if (!hasGifts) {
+    db.prepare('ALTER TABLE games ADD COLUMN gifts TEXT DEFAULT ""').run()
   }
   db.prepare("UPDATE games SET schedule_type = COALESCE(schedule_type, 'repeat')").run()
 }
@@ -82,6 +86,7 @@ db.prepare(`
     cron TEXT NOT NULL,
     timezone TEXT NOT NULL,
     allow_repeat_winners INTEGER DEFAULT 0,
+    gifts TEXT DEFAULT '',
     schedule_type TEXT DEFAULT 'repeat',
     schedule_payload TEXT,
     created_at TEXT NOT NULL
@@ -99,6 +104,7 @@ const shapeGame = (row) =>
         cron: row.cron,
         timezone: row.timezone,
         allowRepeatWinners: row.allowRepeatWinners === 1,
+        gifts: row.gifts || '',
         scheduleType: row.scheduleType,
         schedulePayload: row.schedulePayload,
         createdAt: row.createdAt,
@@ -167,7 +173,7 @@ function getGames() {
     .prepare(
       `SELECT slug, name, cron, timezone, schedule_type AS scheduleType,
               schedule_payload AS schedulePayload, allow_repeat_winners AS allowRepeatWinners,
-              created_at AS createdAt
+              gifts, created_at AS createdAt
        FROM games
        ORDER BY created_at`,
     )
@@ -180,7 +186,7 @@ function getGame(slug) {
     .prepare(
       `SELECT slug, name, cron, timezone, schedule_type AS scheduleType,
               schedule_payload AS schedulePayload, allow_repeat_winners AS allowRepeatWinners,
-              created_at AS createdAt
+              gifts, created_at AS createdAt
        FROM games
        WHERE slug = ?`,
     )
@@ -204,13 +210,24 @@ function createGame({
   cron,
   timezone,
   allowRepeatWinners = false,
+  gifts = '',
   scheduleType = 'repeat',
   schedulePayload = null,
 }) {
   const payload = serializeSchedulePayload(schedulePayload)
   db.prepare(
-    'INSERT INTO games (slug, name, cron, timezone, allow_repeat_winners, schedule_type, schedule_payload, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-  ).run(slug, name, cron, timezone, allowRepeatWinners ? 1 : 0, scheduleType, payload, new Date().toISOString())
+    'INSERT INTO games (slug, name, cron, timezone, allow_repeat_winners, gifts, schedule_type, schedule_payload, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+  ).run(
+    slug,
+    name,
+    cron,
+    timezone,
+    allowRepeatWinners ? 1 : 0,
+    gifts || '',
+    scheduleType,
+    payload,
+    new Date().toISOString(),
+  )
   return getGame(slug)
 }
 
@@ -232,6 +249,10 @@ function updateGame(slug, data) {
   if (typeof data.allowRepeatWinners === 'boolean') {
     fields.push('allow_repeat_winners = ?')
     values.push(data.allowRepeatWinners ? 1 : 0)
+  }
+  if (typeof data.gifts === 'string') {
+    fields.push('gifts = ?')
+    values.push(data.gifts)
   }
   if (data.scheduleType) {
     fields.push('schedule_type = ?')
@@ -360,6 +381,17 @@ function getRecentWinnerIds(slug, limit) {
     .filter((id) => id)
 }
 
+function getWinnerSequence(slug) {
+  const row = db
+    .prepare(
+      `SELECT COALESCE(MAX(rowid), 0) AS seq
+       FROM winners
+       WHERE game_slug = ?`,
+    )
+    .get(slug)
+  return row?.seq || 0
+}
+
 function replaceEmployees(slug, entries = []) {
   const tx = db.transaction((roster) => {
     db.prepare('DELETE FROM employees WHERE game_slug=?').run(slug)
@@ -395,6 +427,7 @@ module.exports = {
   getRecentWinners,
   insertWinner,
   getRecentWinnerIds,
+  getWinnerSequence,
   replaceEmployees,
   activateAllEmployees,
 }

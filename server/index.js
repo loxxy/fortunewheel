@@ -21,6 +21,7 @@ const {
   getRecentWinners,
   insertWinner,
   getRecentWinnerIds,
+  getWinnerSequence,
   replaceEmployees,
   activateAllEmployees,
 } = require('./db')
@@ -182,10 +183,23 @@ function selectRandomEmployee(slug) {
   return pool[Math.floor(Math.random() * pool.length)]
 }
 
+function parseGifts(raw = '') {
+  if (!raw) return []
+  return String(raw)
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+}
+
 function drawWinner(slug, trigger = 'manual') {
   const game = getGame(slug)
   if (!game) throw new Error(`Game ${slug} not found`)
   const employee = selectRandomEmployee(slug)
+  const gifts = parseGifts(game.gifts)
+  const gift =
+    gifts.length > 0
+      ? gifts[getWinnerSequence(slug) % gifts.length]
+      : ''
   const winner = insertWinner({
     id: randomUUID(),
     slug,
@@ -254,10 +268,14 @@ app.post('/api/:slug/spin', (req, res) => {
 app.get('/api/:slug/config', (req, res) => {
   const game = respondGame(req.params.slug, res)
   if (!game) return
+  const gifts = parseGifts(game.gifts)
+  const nextGift = gifts.length ? gifts[getWinnerSequence(game.slug) % gifts.length] : null
   res.json({
     cron: game.cron,
     timezone: game.timezone || DEFAULT_TZ,
     nextDrawAt: getUpcomingDraw(game),
+    gifts,
+    nextGift,
     allowRepeatWinners: game.allowRepeatWinners === false ? false : Boolean(game.allowRepeatWinners),
     scheduleType: game.scheduleType || 'repeat',
     schedulePayload: parseSchedulePayload(game.schedulePayload),
@@ -284,7 +302,7 @@ app.get('/api/admin/games', requireAdmin, (_req, res) => {
 })
 
 app.post('/api/admin/games', requireAdmin, (req, res) => {
-  const { slug, cron, scheduleType, schedulePayload, allowRepeatWinners } = req.body || {}
+  const { slug, cron, scheduleType, schedulePayload, allowRepeatWinners, gifts } = req.body || {}
   if (!slug) {
     return res.status(400).json({ message: 'slug is required' })
   }
@@ -299,6 +317,7 @@ app.post('/api/admin/games', requireAdmin, (req, res) => {
       timezone: DEFAULT_TZ,
       scheduleType: type,
       schedulePayload: payload,
+      gifts: gifts || '',
       allowRepeatWinners: allowRepeatWinners ? 1 : 0,
     })
     scheduleGame(game)
@@ -321,6 +340,7 @@ app.patch('/api/admin/:slug/config', requireAdmin, (req, res) => {
     cron: cronValue,
     timezone: DEFAULT_TZ,
     allowRepeatWinners: typeof req.body?.allowRepeatWinners === 'boolean' ? req.body.allowRepeatWinners : game.allowRepeatWinners,
+    gifts: typeof req.body?.gifts === 'string' ? req.body.gifts : game.gifts,
     scheduleType: type,
     schedulePayload: req.body?.schedulePayload || null,
   })

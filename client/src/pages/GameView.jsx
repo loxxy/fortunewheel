@@ -606,6 +606,10 @@ const GameView = () => {
             </div>
           ) : (
             <>
+              <div className="info-card info-card--gift">
+                <p className="info-card__label">Gift</p>
+                <h3>{config?.nextGift || '—'}</h3>
+              </div>
               <div className="info-card">
                 <p className="info-card__label">Next Draw In</p>
                 <Countdown target={config?.nextDrawAt} />

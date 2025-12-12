@@ -304,6 +304,7 @@ const AdminPanel = () => {
   const [formSlug, setFormSlug] = useState('')
   const [editingSchedule, setEditingSchedule] = useState(() => defaultScheduleState())
   const [allowRepeats, setAllowRepeats] = useState(true)
+  const [gifts, setGifts] = useState('')
   const [roster, setRoster] = useState([])
   const [bulkAddInput, setBulkAddInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -466,6 +467,7 @@ const AdminPanel = () => {
     setFormSlug(slug)
     setDetailStatus('Loading game details…')
     setAllowRepeats(true)
+    setGifts('')
     setRoster([])
     setEditingSchedule(defaultScheduleState())
   }
@@ -479,11 +481,13 @@ const AdminPanel = () => {
     if (currentGame) {
       setEditingSchedule(deriveScheduleState(currentGame))
       setAllowRepeats(currentGame.allowRepeatWinners ?? true)
+      setGifts(currentGame.gifts || '')
       setFormSlug(currentGame.slug)
       setDetailStatus('')
     } else if (isCreating) {
       setEditingSchedule(defaultScheduleState())
       setAllowRepeats(true)
+      setGifts('')
       setFormSlug('')
       setDetailStatus('Ready to create a new game.')
     } else {
@@ -532,6 +536,7 @@ const AdminPanel = () => {
             setFormSlug('')
             setEditingSchedule(defaultScheduleState())
             setAllowRepeats(true)
+            setGifts('')
             setIsCreating(false)
             setDetailStatus('')
             setSavingStatus('')
@@ -555,6 +560,8 @@ const AdminPanel = () => {
                 setFormSlug('')
                 setRoster([])
                 setEditingSchedule(defaultScheduleState())
+                setAllowRepeats(true)
+                setGifts('')
                 setDetailStatus('Ready to create a new game.')
               }}
             >
@@ -600,12 +607,17 @@ const AdminPanel = () => {
                       if (isCreating) {
                         await request('/api/admin/games', {
                           method: 'POST',
-                          body: JSON.stringify({ slug: targetSlug, allowRepeatWinners: allowRepeats, ...scheduleRequest }),
+                          body: JSON.stringify({
+                            slug: targetSlug,
+                            allowRepeatWinners: allowRepeats,
+                            gifts,
+                            ...scheduleRequest,
+                          }),
                         })
                       } else if (currentGame?.slug) {
                         await request(`/api/admin/${currentGame.slug}/config`, {
                           method: 'PATCH',
-                          body: JSON.stringify({ ...scheduleRequest, allowRepeatWinners: allowRepeats }),
+                          body: JSON.stringify({ ...scheduleRequest, allowRepeatWinners: allowRepeats, gifts }),
                         })
                       }
                       await saveRosterForSlug(targetSlug)
@@ -640,6 +652,16 @@ const AdminPanel = () => {
                       schedule={editingSchedule}
                       onChange={setEditingSchedule}
                       name="edit-schedule"
+                    />
+                  </div>
+                  <div className="admin-form__group">
+                    <label htmlFor="gift-list">Gifts (comma separated)</label>
+                    <textarea
+                      id="gift-list"
+                      rows={2}
+                      value={gifts}
+                      onChange={(event) => setGifts(event.target.value)}
+                      placeholder="Mug, T-shirt, Gift card"
                     />
                   </div>
                   <label className="checkbox-inline">
