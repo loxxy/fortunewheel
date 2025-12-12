@@ -516,6 +516,11 @@
   width: fit-content;
 }
 
+.admin-form__button--danger {
+  background: rgba(255, 93, 93, 0.3);
+  border: 1px solid rgba(255, 93, 93, 0.5);
+}
+
 .checkbox-inline {
   display: inline-flex;
   align-items: center;

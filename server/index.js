@@ -20,6 +20,7 @@ const {
   deleteEmployee,
   getRecentWinners,
   insertWinner,
+  deleteWinnersForGame,
   getRecentWinnerIds,
   getWinnerSequence,
   replaceEmployees,
@@ -402,6 +403,14 @@ app.put('/api/admin/:slug/employees', requireAdmin, (req, res) => {
   }
   const updated = replaceEmployees(game.slug, cleaned)
   res.json({ employees: updated })
+})
+
+app.post('/api/admin/:slug/winners/reset', requireAdmin, (req, res) => {
+  const game = respondGame(req.params.slug, res)
+  if (!game) return
+  deleteWinnersForGame(game.slug)
+  activateAllEmployees(game.slug)
+  res.status(204).end()
 })
 
 const SPA_ROUTE = /^\/(?!api).*/

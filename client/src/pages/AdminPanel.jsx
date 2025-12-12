@@ -729,6 +729,26 @@ const AdminPanel = () => {
                     <button type="button" className="admin-form__button" onClick={handleAddBulk}>
                       Add to List
                     </button>
+                    <button
+                      type="button"
+                      className="admin-form__button admin-form__button--danger"
+                      onClick={async () => {
+                        if (!selectedGame) return
+                        const confirmed = window.confirm(
+                          'Reset winners and reactivate all employees for this game? This cannot be undone.',
+                        )
+                        if (!confirmed) return
+                        try {
+                          await request(`/api/admin/${selectedGame}/winners/reset`, { method: 'POST' })
+                          await fetchEmployees()
+                          setError('')
+                        } catch (err) {
+                          setError(err.message)
+                        }
+                      }}
+                    >
+                      Reset Winners
+                    </button>
                   </div>
                 </div>
               </div>
