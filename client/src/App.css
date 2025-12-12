@@ -382,6 +382,10 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
+.roster-table__row--inactive {
+  opacity: 0.6;
+}
+
 .roster-table__row:last-of-type {
   border-bottom: none;
 }
@@ -391,8 +395,22 @@
   text-align: right;
 }
 
+.roster-table__name-group {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
 .roster-table__name {
   font-weight: 600;
+}
+
+.roster-table__status {
+  font-size: 0.75rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .roster-table__delete {
@@ -496,6 +514,13 @@
   color: white;
   cursor: pointer;
   width: fit-content;
+}
+
+.checkbox-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.95rem;
 }
 
 .admin-form__group {

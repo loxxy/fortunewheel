@@ -22,6 +22,7 @@ const {
   insertWinner,
   getRecentWinnerIds,
   replaceEmployees,
+  activateAllEmployees,
 } = require('./db')
 
 const PORT = process.env.PORT || 4000
@@ -171,9 +172,11 @@ function selectRandomEmployee(slug) {
   if (!employees.length) {
     throw new Error(`No employees configured for ${slug}`)
   }
+  const game = getGame(slug)
+  const allowRepeats = game?.allowRepeatWinners
   const recentIds = new Set(getRecentWinnerIds(slug, REPEAT_COOLDOWN))
   const pool =
-    employees.length > recentIds.size
+    !allowRepeats && employees.length > recentIds.size
       ? employees.filter((emp) => !recentIds.has(emp.id))
       : employees
   return pool[Math.floor(Math.random() * pool.length)]
@@ -199,6 +202,10 @@ function drawWinner(slug, trigger = 'manual') {
       'DELETE FROM winners WHERE game_slug=? AND id NOT IN (SELECT id FROM winners WHERE game_slug=? ORDER BY drawn_at DESC LIMIT ?)',
     ).run(slug, slug, WINNER_HISTORY_LIMIT)
   }
+
+  if (!game.allowRepeatWinners) {
+    db.prepare('UPDATE employees SET active=0 WHERE game_slug=? AND id=?').run(slug, employee.id)
+  }
   return winner
 }
 
@@ -223,7 +230,9 @@ function respondGame(slug, res) {
 app.get('/api/:slug/employees', (req, res) => {
   const game = respondGame(req.params.slug, res)
   if (!game) return
-  res.json({ employees: getEmployees(game.slug) })
+  const employees = getEmployees(game.slug)
+  const list = game.allowRepeatWinners ? employees : employees.filter((emp) => emp.active !== 0)
+  res.json({ employees: list })
 })
 
 app.get('/api/:slug/winners', (req, res) => {
@@ -249,6 +258,7 @@ app.get('/api/:slug/config', (req, res) => {
     cron: game.cron,
     timezone: game.timezone || DEFAULT_TZ,
     nextDrawAt: getUpcomingDraw(game),
+    allowRepeatWinners: game.allowRepeatWinners === false ? false : Boolean(game.allowRepeatWinners),
     scheduleType: game.scheduleType || 'repeat',
     schedulePayload: parseSchedulePayload(game.schedulePayload),
   })
@@ -274,7 +284,7 @@ app.get('/api/admin/games', requireAdmin, (_req, res) => {
 })
 
 app.post('/api/admin/games', requireAdmin, (req, res) => {
-  const { slug, cron, scheduleType, schedulePayload } = req.body || {}
+  const { slug, cron, scheduleType, schedulePayload, allowRepeatWinners } = req.body || {}
   if (!slug) {
     return res.status(400).json({ message: 'slug is required' })
   }
@@ -289,6 +299,7 @@ app.post('/api/admin/games', requireAdmin, (req, res) => {
       timezone: DEFAULT_TZ,
       scheduleType: type,
       schedulePayload: payload,
+      allowRepeatWinners: allowRepeatWinners ? 1 : 0,
     })
     scheduleGame(game)
     return res.status(201).json({ game })
@@ -309,9 +320,13 @@ app.patch('/api/admin/:slug/config', requireAdmin, (req, res) => {
     name: game.slug,
     cron: cronValue,
     timezone: DEFAULT_TZ,
+    allowRepeatWinners: typeof req.body?.allowRepeatWinners === 'boolean' ? req.body.allowRepeatWinners : game.allowRepeatWinners,
     scheduleType: type,
     schedulePayload: req.body?.schedulePayload || null,
   })
+  if (!game.allowRepeatWinners && updated.allowRepeatWinners) {
+    activateAllEmployees(game.slug)
+  }
   scheduleGame(updated)
   res.json({ game: updated })
 })

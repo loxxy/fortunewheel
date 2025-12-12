@@ -9,6 +9,7 @@ const IDLE_INTERVAL_MS = 60
 const SPIN_DURATION_MS = 5200
 const MAX_WHEEL_SLICES = 120
 const MAX_BUCKETS = 80
+const WINNER_DISPLAY_COUNT = 10
 
 const shuffleEmployees = (list) => {
   if (!Array.isArray(list)) return []
@@ -124,7 +125,7 @@ const GameView = () => {
   }, [request, gameSlug])
 
   const fetchWinners = useCallback(async () => {
-    const result = await request(`/api/${gameSlug}/winners?limit=6`)
+    const result = await request(`/api/${gameSlug}/winners?limit=${WINNER_DISPLAY_COUNT}`)
     setWinners(result.winners ?? [])
   }, [request, gameSlug])
 
@@ -433,23 +434,23 @@ const GameView = () => {
     const latestWinner = winners[0]
     if (!displayedWinnerId) {
       if (isPreReveal) {
-        pendingWinnersRef.current = winners.slice(0, 3)
+        pendingWinnersRef.current = winners.slice(0, WINNER_DISPLAY_COUNT)
         setDisplayedWinnerId(latestWinner.id)
         spinToWinner(latestWinner)
       } else {
         setDisplayedWinnerId(latestWinner.id)
         setActiveWinner((prev) => prev ?? latestWinner)
-        setVisibleWinners(winners.slice(0, 3))
+        setVisibleWinners(winners.slice(0, WINNER_DISPLAY_COUNT))
       }
       return
     }
 
     if (latestWinner.id === displayedWinnerId) {
-      pendingWinnersRef.current = winners.slice(0, 3)
+      pendingWinnersRef.current = winners.slice(0, WINNER_DISPLAY_COUNT)
       return
     }
 
-    pendingWinnersRef.current = winners.slice(0, 3)
+    pendingWinnersRef.current = winners.slice(0, WINNER_DISPLAY_COUNT)
     setDisplayedWinnerId(latestWinner.id)
     spinToWinner(latestWinner)
   }, [winners, displayedWinnerId, spinToWinner, employees.length, isPreReveal])
@@ -496,7 +497,7 @@ const GameView = () => {
       setVisibleWinners(pendingWinnersRef.current)
       pendingWinnersRef.current = null
     } else if (!pendingWinnersRef.current && !visibleWinners.length && winners.length) {
-      setVisibleWinners(winners.slice(0, 3))
+      setVisibleWinners(winners.slice(0, WINNER_DISPLAY_COUNT))
     }
   }, [isSpinning, isCelebrating, isPreReveal, visibleWinners.length, winners])
 

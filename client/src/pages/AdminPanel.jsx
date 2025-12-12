@@ -303,6 +303,7 @@ const AdminPanel = () => {
   const [selectedGame, setSelectedGame] = useState('')
   const [formSlug, setFormSlug] = useState('')
   const [editingSchedule, setEditingSchedule] = useState(() => defaultScheduleState())
+  const [allowRepeats, setAllowRepeats] = useState(true)
   const [roster, setRoster] = useState([])
   const [bulkAddInput, setBulkAddInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -388,16 +389,16 @@ const AdminPanel = () => {
       const targetSlug = overrideSlug || selectedGame
       if (!authed || !targetSlug) return
       setDetailStatus('Loading game details…')
-    try {
-      const result = await request(`/api/admin/${targetSlug}/employees`)
-      const list = result.employees ?? []
-      setRoster(list)
-      setBulkAddInput('')
-      setDetailStatus('')
-    } catch (err) {
-      setError(err.message)
-      setDetailStatus('')
-    }
+      try {
+        const result = await request(`/api/admin/${targetSlug}/employees`)
+        const list = result.employees ?? []
+        setRoster(list)
+        setBulkAddInput('')
+        setDetailStatus('')
+      } catch (err) {
+        setError(err.message)
+        setDetailStatus('')
+      }
     },
     [authed, request, selectedGame],
   )
@@ -440,6 +441,19 @@ const AdminPanel = () => {
     setError('')
   }
 
+  const saveRosterForSlug = useCallback(
+    async (slug) => {
+      if (!slug) return
+      await request(`/api/admin/${slug}/employees`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          employees: roster.map((emp) => ({ firstName: emp.firstName, lastName: emp.lastName })),
+        }),
+      })
+    },
+    [request, roster],
+  )
+
   const handleRemoveEmployee = (index) => {
     setRoster((prev) => prev.filter((_, idx) => idx !== index))
   }
@@ -451,6 +465,7 @@ const AdminPanel = () => {
     setSelectedGame(slug)
     setFormSlug(slug)
     setDetailStatus('Loading game details…')
+    setAllowRepeats(true)
     setRoster([])
     setEditingSchedule(defaultScheduleState())
   }
@@ -463,10 +478,12 @@ const AdminPanel = () => {
   useEffect(() => {
     if (currentGame) {
       setEditingSchedule(deriveScheduleState(currentGame))
+      setAllowRepeats(currentGame.allowRepeatWinners ?? true)
       setFormSlug(currentGame.slug)
       setDetailStatus('')
     } else if (isCreating) {
       setEditingSchedule(defaultScheduleState())
+      setAllowRepeats(true)
       setFormSlug('')
       setDetailStatus('Ready to create a new game.')
     } else {
@@ -514,6 +531,7 @@ const AdminPanel = () => {
             setSelectedGame('')
             setFormSlug('')
             setEditingSchedule(defaultScheduleState())
+            setAllowRepeats(true)
             setIsCreating(false)
             setDetailStatus('')
             setSavingStatus('')
@@ -582,23 +600,15 @@ const AdminPanel = () => {
                       if (isCreating) {
                         await request('/api/admin/games', {
                           method: 'POST',
-                          body: JSON.stringify({ slug: targetSlug, ...scheduleRequest }),
+                          body: JSON.stringify({ slug: targetSlug, allowRepeatWinners: allowRepeats, ...scheduleRequest }),
                         })
                       } else if (currentGame?.slug) {
                         await request(`/api/admin/${currentGame.slug}/config`, {
                           method: 'PATCH',
-                          body: JSON.stringify(scheduleRequest),
+                          body: JSON.stringify({ ...scheduleRequest, allowRepeatWinners: allowRepeats }),
                         })
                       }
-                      await request(`/api/admin/${targetSlug}/employees`, {
-                        method: 'PUT',
-                        body: JSON.stringify({
-                          employees: roster.map((emp) => ({
-                            firstName: emp.firstName,
-                            lastName: emp.lastName,
-                          })),
-                        }),
-                      })
+                      await saveRosterForSlug(targetSlug)
                       await fetchGames()
                       await fetchEmployees(targetSlug)
                       setSelectedGame(targetSlug)
@@ -632,6 +642,14 @@ const AdminPanel = () => {
                       name="edit-schedule"
                     />
                   </div>
+                  <label className="checkbox-inline">
+                    <input
+                      type="checkbox"
+                      checked={allowRepeats}
+                      onChange={(event) => setAllowRepeats(event.target.checked)}
+                    />
+                    <span>Allow repeat winners</span>
+                  </label>
                   {detailStatus && <p className="status-text">{detailStatus}</p>}
                   {savingStatus && <p className="status-text">{savingStatus}</p>}
                   <button type="submit" disabled={Boolean(savingStatus)}>
@@ -647,22 +665,31 @@ const AdminPanel = () => {
                 </div>
                 <div className="roster-table">
                   {roster.length ? (
-                    roster.map((emp, index) => (
-                      <div key={emp.id || `emp-${index}`} className="roster-table__row">
-                        <span className="roster-table__index">{index + 1}.</span>
-                        <span className="roster-table__name">
-                          {`${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim()}
-                        </span>
-                        <button
-                          type="button"
-                          className="roster-table__delete"
-                          aria-label={`Remove ${emp.firstName}`}
-                          onClick={() => handleRemoveEmployee(index)}
+                    roster.map((emp, index) => {
+                      const inactive = !allowRepeats && emp.active === 0
+                      return (
+                        <div
+                          key={emp.id || `emp-${index}`}
+                          className={inactive ? 'roster-table__row roster-table__row--inactive' : 'roster-table__row'}
                         >
-                          ×
-                        </button>
-                      </div>
-                    ))
+                          <span className="roster-table__index">{index + 1}.</span>
+                          <div className="roster-table__name-group">
+                            <span className="roster-table__name">
+                              {`${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim()}
+                            </span>
+                            {inactive && <span className="roster-table__status">Inactive</span>}
+                          </div>
+                          <button
+                            type="button"
+                            className="roster-table__delete"
+                            aria-label={`Remove ${emp.firstName}`}
+                            onClick={() => handleRemoveEmployee(index)}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      )
+                    })
                   ) : (
                     <p className="roster-table__empty">No employees yet.</p>
                   )}
