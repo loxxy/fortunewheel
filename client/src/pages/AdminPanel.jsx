@@ -749,6 +749,35 @@ const AdminPanel = () => {
                     >
                       Reset Winners
                     </button>
+                    <button
+                      type="button"
+                      className="admin-form__button"
+                      onClick={async () => {
+                        if (!selectedGame) return
+                        try {
+                          const response = await fetch(`${API_BASE}/api/admin/${selectedGame}/winners/export`, {
+                            headers: { Authorization: `Bearer ${secret}` },
+                          })
+                          if (!response.ok) {
+                            const payload = await response.json().catch(() => ({}))
+                            throw new Error(payload.message || 'Export failed')
+                          }
+                          const blob = await response.blob()
+                          const url = URL.createObjectURL(blob)
+                          const link = document.createElement('a')
+                          link.href = url
+                          link.download = `${selectedGame}-winners.csv`
+                          document.body.appendChild(link)
+                          link.click()
+                          link.remove()
+                          URL.revokeObjectURL(url)
+                        } catch (err) {
+                          setError(err.message)
+                        }
+                      }}
+                    >
+                      Export Winners
+                    </button>
                   </div>
                 </div>
               </div>

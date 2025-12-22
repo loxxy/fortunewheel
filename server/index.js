@@ -206,6 +206,7 @@ function drawWinner(slug, trigger = 'manual') {
     slug,
     employeeId: employee.id,
     trigger,
+    gift,
     snapshot: {
       firstName: employee.firstName,
       lastName: employee.lastName,
@@ -411,6 +412,32 @@ app.post('/api/admin/:slug/winners/reset', requireAdmin, (req, res) => {
   deleteWinnersForGame(game.slug)
   activateAllEmployees(game.slug)
   res.status(204).end()
+})
+
+app.get('/api/admin/:slug/winners/export', requireAdmin, (req, res) => {
+  const game = respondGame(req.params.slug, res)
+  if (!game) return
+  const limitRaw = parseInt(req.query.limit, 10)
+  const limit = Number.isNaN(limitRaw) ? WINNER_HISTORY_LIMIT : Math.max(1, limitRaw)
+  const winners = getRecentWinners(game.slug, limit)
+  const escape = (value) => `"${String(value ?? '').replace(/\"/g, '""')}"`
+  const rows = [
+    ['drawn_at', 'first_name', 'last_name', 'gift', 'trigger'],
+    ...winners.map((winner) => [
+      winner.drawnAt,
+      winner.employee?.firstName || '',
+      winner.employee?.lastName || '',
+      winner.gift || '',
+      winner.trigger,
+    ]),
+  ]
+  const csv = rows.map((row) => row.map(escape).join(',')).join('\n')
+  res.setHeader('Content-Type', 'text/csv')
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="${game.slug}-winners.csv"`,
+  )
+  res.send(csv)
 })
 
 const SPA_ROUTE = /^\/(?!api).*/

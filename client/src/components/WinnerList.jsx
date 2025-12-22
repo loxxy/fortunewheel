@@ -40,6 +40,7 @@ const WinnerList = ({ winners, headline, activeWinnerId }) => (
               <p className="winner-list__meta">
                 {winner.trigger === 'manual' ? 'Manual spin' : 'Scheduled draw'} ·{' '}
                 {formatDisplayDate(winner.drawnAt)}
+                {winner.gift ? ` · Gift: ${winner.gift}` : ''}
               </p>
             </div>
           </li>
@@ -57,6 +58,7 @@ WinnerList.propTypes = {
       id: PropTypes.string.isRequired,
       drawnAt: PropTypes.string.isRequired,
       trigger: PropTypes.string.isRequired,
+      gift: PropTypes.string,
       employee: PropTypes.shape({
         firstName: PropTypes.string,
         lastName: PropTypes.string,

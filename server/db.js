@@ -31,6 +31,7 @@ function ensureWinnerSnapshots() {
   const columns = db.prepare('PRAGMA table_info(winners)').all()
   const columnNames = columns.map((column) => column.name)
   const hasSnapshotColumns = columnNames.includes('employee_first_name')
+  const hasGiftColumn = columnNames.includes('gift')
   const employeeIdColumn = columns.find((column) => column.name === 'employee_id')
   const employeeIdNotNull = employeeIdColumn ? employeeIdColumn.notnull === 1 : false
   if (hasSnapshotColumns && !employeeIdNotNull) {
@@ -46,6 +47,7 @@ function ensureWinnerSnapshots() {
         employee_first_name TEXT NOT NULL,
         employee_last_name TEXT DEFAULT '',
         employee_avatar TEXT DEFAULT '',
+        gift TEXT DEFAULT '',
         drawn_at TEXT NOT NULL,
         trigger TEXT NOT NULL,
         FOREIGN KEY (game_slug) REFERENCES games(slug) ON DELETE CASCADE,
@@ -53,20 +55,29 @@ function ensureWinnerSnapshots() {
       )
     `).run()
     if (hasSnapshotColumns) {
-      db.prepare(`
-        INSERT INTO winners_tmp (id, game_slug, employee_id, employee_first_name, employee_last_name, employee_avatar, drawn_at, trigger)
-        SELECT id, game_slug, employee_id, employee_first_name, employee_last_name, employee_avatar, drawn_at, trigger
-        FROM winners
-      `).run()
+      if (hasGiftColumn) {
+        db.prepare(`
+          INSERT INTO winners_tmp (id, game_slug, employee_id, employee_first_name, employee_last_name, employee_avatar, gift, drawn_at, trigger)
+          SELECT id, game_slug, employee_id, employee_first_name, employee_last_name, employee_avatar, COALESCE(gift, ''), drawn_at, trigger
+          FROM winners
+        `).run()
+      } else {
+        db.prepare(`
+          INSERT INTO winners_tmp (id, game_slug, employee_id, employee_first_name, employee_last_name, employee_avatar, gift, drawn_at, trigger)
+          SELECT id, game_slug, employee_id, employee_first_name, employee_last_name, employee_avatar, '', drawn_at, trigger
+          FROM winners
+        `).run()
+      }
     } else {
       db.prepare(`
-        INSERT INTO winners_tmp (id, game_slug, employee_id, employee_first_name, employee_last_name, employee_avatar, drawn_at, trigger)
+        INSERT INTO winners_tmp (id, game_slug, employee_id, employee_first_name, employee_last_name, employee_avatar, gift, drawn_at, trigger)
         SELECT w.id,
                w.game_slug,
                w.employee_id,
                COALESCE(e.first_name, 'Former Employee'),
                COALESCE(e.last_name, ''),
                COALESCE(e.avatar, ''),
+               '',
                w.drawn_at,
                w.trigger
         FROM winners w
@@ -77,6 +88,14 @@ function ensureWinnerSnapshots() {
     db.prepare('ALTER TABLE winners_tmp RENAME TO winners').run()
   })
   migrate()
+}
+
+function ensureWinnerGiftColumn() {
+  const columns = db.prepare('PRAGMA table_info(winners)').all()
+  const hasGift = columns.some((column) => column.name === 'gift')
+  if (!hasGift) {
+    db.prepare("ALTER TABLE winners ADD COLUMN gift TEXT DEFAULT ''").run()
+  }
 }
 
 db.prepare(`
@@ -133,6 +152,7 @@ db.prepare(`
     employee_first_name TEXT NOT NULL,
     employee_last_name TEXT DEFAULT '',
     employee_avatar TEXT DEFAULT '',
+    gift TEXT DEFAULT '',
     drawn_at TEXT NOT NULL,
     trigger TEXT NOT NULL,
     FOREIGN KEY (game_slug) REFERENCES games(slug) ON DELETE CASCADE,
@@ -141,6 +161,7 @@ db.prepare(`
 `).run()
 
 ensureWinnerSnapshots()
+ensureWinnerGiftColumn()
 
 const WINNER_BASE_SELECT = `
   id,
@@ -149,6 +170,7 @@ const WINNER_BASE_SELECT = `
   employee_first_name AS employeeFirstName,
   employee_last_name AS employeeLastName,
   employee_avatar AS employeeAvatar,
+  gift,
   drawn_at AS drawnAt,
   trigger
 `
@@ -159,6 +181,7 @@ const shapeWinner = (row) =>
         id: row.id,
         drawnAt: row.drawnAt,
         trigger: row.trigger,
+        gift: row.gift || '',
         employee: {
           id: row.employeeId || null,
           firstName: row.employeeFirstName || 'Former Employee',
@@ -351,10 +374,10 @@ function getWinnerById(id) {
   return shapeWinner(row)
 }
 
-function insertWinner({ id, slug, employeeId, trigger, snapshot = {} }) {
+function insertWinner({ id, slug, employeeId, trigger, gift = '', snapshot = {} }) {
   db.prepare(
-    `INSERT INTO winners (id, game_slug, employee_id, employee_first_name, employee_last_name, employee_avatar, drawn_at, trigger)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO winners (id, game_slug, employee_id, employee_first_name, employee_last_name, employee_avatar, gift, drawn_at, trigger)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     id,
     slug,
@@ -362,6 +385,7 @@ function insertWinner({ id, slug, employeeId, trigger, snapshot = {} }) {
     snapshot.firstName || 'Former Employee',
     snapshot.lastName || '',
     snapshot.avatar || '',
+    gift || '',
     new Date().toISOString(),
     trigger,
   )
