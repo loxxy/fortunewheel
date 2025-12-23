@@ -397,6 +397,18 @@ function updateWinnerGift(id, gift) {
   return getWinnerById(id)
 }
 
+function updateWinnerGifts(slug, updates = []) {
+  if (!updates.length) return
+  const tx = db.transaction((rows) => {
+    const stmt = db.prepare('UPDATE winners SET gift = ? WHERE id = ? AND game_slug = ?')
+    rows.forEach(({ id, gift }) => {
+      if (!id) return
+      stmt.run(gift ?? '', id, slug)
+    })
+  })
+  tx(updates)
+}
+
 function deleteWinnersForGame(slug) {
   db.prepare('DELETE FROM winners WHERE game_slug = ?').run(slug)
 }
@@ -460,6 +472,7 @@ module.exports = {
   getRecentWinners,
   insertWinner,
   updateWinnerGift,
+  updateWinnerGifts,
   deleteWinnersForGame,
   getRecentWinnerIds,
   getWinnerSequence,

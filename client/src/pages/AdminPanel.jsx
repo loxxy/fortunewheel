@@ -309,12 +309,16 @@ const AdminPanel = () => {
   const [roster, setRoster] = useState([])
   const [bulkAddInput, setBulkAddInput] = useState('')
   const [winners, setWinners] = useState([])
+  const [winnerGifts, setWinnerGifts] = useState({})
   const [activeTab, setActiveTab] = useState('config')
   const [loading, setLoading] = useState(false)
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false)
   const [detailStatus, setDetailStatus] = useState('')
   const [savingStatus, setSavingStatus] = useState('')
   const [error, setError] = useState('')
   const [isCreating, setIsCreating] = useState(false)
+  const [uiNotice, setUiNotice] = useState(null)
+  const [confirmReset, setConfirmReset] = useState(false)
 
   const authed = Boolean(secret)
 
@@ -338,6 +342,9 @@ const AdminPanel = () => {
         }
         throw new Error(message)
       }
+      if (response.status === 204) return {}
+      const contentType = response.headers.get('content-type') || ''
+      if (!contentType.includes('application/json')) return {}
       return response.json()
     },
     [secret, authed],
@@ -392,16 +399,13 @@ const AdminPanel = () => {
     async (overrideSlug) => {
       const targetSlug = overrideSlug || selectedGame
       if (!authed || !targetSlug) return
-      setDetailStatus('Loading game details…')
       try {
         const result = await request(`/api/admin/${targetSlug}/employees`)
         const list = result.employees ?? []
         setRoster(list)
         setBulkAddInput('')
-        setDetailStatus('')
       } catch (err) {
         setError(err.message)
-        setDetailStatus('')
       }
     },
     [authed, request, selectedGame],
@@ -413,7 +417,13 @@ const AdminPanel = () => {
       if (!authed || !targetSlug) return
       try {
         const result = await request(`/api/${targetSlug}/winners?limit=${WINNER_DISPLAY_COUNT}`)
-        setWinners(result.winners ?? [])
+        const list = result.winners ?? []
+        setWinners(list)
+        const giftMap = {}
+        list.forEach((winner) => {
+          giftMap[winner.id] = winner.gift || ''
+        })
+        setWinnerGifts(giftMap)
       } catch (err) {
         setError(err.message)
       }
@@ -421,12 +431,30 @@ const AdminPanel = () => {
     [authed, request, selectedGame],
   )
 
+  const loadGameDetails = useCallback(
+    async (overrideSlug) => {
+      const targetSlug = overrideSlug || selectedGame
+      if (!authed || !targetSlug) return
+      setDetailStatus('Loading game details…')
+      setIsLoadingDetails(true)
+      try {
+        await Promise.all([fetchEmployees(targetSlug), fetchWinners(targetSlug)])
+        setDetailStatus('')
+      } catch (err) {
+        setError(err.message)
+        setDetailStatus('')
+      } finally {
+        setIsLoadingDetails(false)
+      }
+    },
+    [authed, selectedGame, fetchEmployees, fetchWinners],
+  )
+
   useEffect(() => {
     if (!isCreating) {
-      fetchEmployees()
-      fetchWinners()
+      loadGameDetails()
     }
-  }, [fetchEmployees, fetchWinners, isCreating])
+  }, [loadGameDetails, isCreating])
 
   const handleAddBulk = () => {
     const entries = parseRosterText(bulkAddInput)
@@ -458,6 +486,7 @@ const AdminPanel = () => {
     setRoster((prev) => [...prev, ...enriched])
     setBulkAddInput('')
     setError('')
+    setUiNotice(`Added ${entries.length} name${entries.length === 1 ? '' : 's'} to the list.`)
   }
 
   const saveRosterForSlug = useCallback(
@@ -473,15 +502,28 @@ const AdminPanel = () => {
     [request, roster],
   )
 
-  const handleUpdateWinnerGift = async (winnerId, gift) => {
+  const handleWinnerGiftChange = (winnerId, gift) => {
+    setWinnerGifts((prev) => ({ ...prev, [winnerId]: gift }))
+  }
+
+  const handleSaveWinnerGifts = async () => {
     if (!selectedGame) return
     try {
-      await request(`/api/admin/${selectedGame}/winners/${winnerId}`, {
+      const updates = winners
+        .map((winner) => {
+          const nextGift = winnerGifts[winner.id] ?? ''
+          if ((winner.gift || '') === nextGift) return null
+          return { id: winner.id, gift: nextGift }
+        })
+        .filter(Boolean)
+      if (!updates.length) return
+      await request(`/api/admin/${selectedGame}/winners`, {
         method: 'PATCH',
-        body: JSON.stringify({ gift }),
+        body: JSON.stringify({ updates }),
       })
       await fetchWinners()
       setError('')
+      setUiNotice('Winner gifts updated.')
     } catch (err) {
       setError(err.message)
     }
@@ -498,9 +540,11 @@ const AdminPanel = () => {
     setSelectedGame(slug)
     setFormSlug(slug)
     setDetailStatus('Loading game details…')
+    setIsLoadingDetails(true)
     setAllowRepeats(true)
     setGifts('')
     setRoster([])
+    setWinnerGifts({})
     setEditingSchedule(defaultScheduleState())
     setActiveTab('config')
   }
@@ -564,6 +608,7 @@ const AdminPanel = () => {
             setSecret('')
             setGames([])
             setRoster([])
+            setWinnerGifts({})
             setBulkAddInput('')
             setSelectedGame('')
             setFormSlug('')
@@ -611,10 +656,11 @@ const AdminPanel = () => {
                 <li key={game.slug}>
                   <button
                     type="button"
-                    className={game.slug === selectedGame && !isCreating ? 'admin-list__item--active' : ''}
+                    className={game.slug === selectedGame && !isCreating ? 'admin-list__item admin-list__item--active' : 'admin-list__item'}
                     onClick={() => handleSelectGame(game.slug)}
                   >
-                    <strong>{game.slug}</strong>
+                    <span>{game.slug}</span>
+                    {game.slug === selectedGame && !isCreating && <span className="admin-list__tag">Editing</span>}
                   </button>
                 </li>
               ))}
@@ -625,6 +671,12 @@ const AdminPanel = () => {
         <div className="admin-card admin-card--detail">
           {isCreating || currentGame ? (
             <>
+              {isLoadingDetails && (
+                <div className="admin-loading">
+                  <span className="admin-loading__spinner" aria-hidden="true" />
+                  <span>Loading game details…</span>
+                </div>
+              )}
               <div className="admin-tabs">
                 <button
                   type="button"
@@ -645,7 +697,7 @@ const AdminPanel = () => {
                   className={activeTab === 'winners' ? 'admin-tab admin-tab--active' : 'admin-tab'}
                   onClick={() => setActiveTab('winners')}
                 >
-                  Edit Winners
+                  Manage Winners
                 </button>
               </div>
 
@@ -682,13 +734,13 @@ const AdminPanel = () => {
                       }
                       await saveRosterForSlug(targetSlug)
                       await fetchGames()
-                      await fetchEmployees(targetSlug)
-                      await fetchWinners(targetSlug)
+                      await loadGameDetails(targetSlug)
                       setSelectedGame(targetSlug)
                       setIsCreating(false)
                       setFormSlug(targetSlug)
                       setDetailStatus('')
                       setError('')
+                      setUiNotice(isCreating ? 'Game created.' : 'Game saved.')
                     } catch (err) {
                       setError(err.message)
                     } finally {
@@ -800,7 +852,7 @@ const AdminPanel = () => {
               {activeTab === 'winners' && (
                 <div className="admin-card admin-card--winners">
                   <div className="admin-card__header">
-                    <h3>Recent Winners</h3>
+                    <h3>Manage Winners</h3>
                     <span>{winners.length} shown</span>
                   </div>
                   <div className="winner-edit-list">
@@ -818,9 +870,9 @@ const AdminPanel = () => {
                           <input
                             className="winner-edit-input"
                             type="text"
-                            value={winner.gift || ''}
+                            value={winnerGifts[winner.id] ?? winner.gift ?? ''}
                             placeholder="Gift"
-                            onChange={(event) => handleUpdateWinnerGift(winner.id, event.target.value)}
+                            onChange={(event) => handleWinnerGiftChange(winner.id, event.target.value)}
                           />
                         </div>
                       ))
@@ -828,7 +880,14 @@ const AdminPanel = () => {
                       <p className="winner-edit-empty">No winners yet.</p>
                     )}
                   </div>
-                  <div className="admin-form__inline">
+                  <div className="admin-form__inline admin-form__inline--row">
+                    <button
+                      type="button"
+                      className="admin-form__button"
+                      onClick={handleSaveWinnerGifts}
+                    >
+                      Save Changes
+                    </button>
                     <button
                       type="button"
                       className="admin-form__button"
@@ -863,18 +922,7 @@ const AdminPanel = () => {
                       className="admin-form__button admin-form__button--danger"
                       onClick={async () => {
                         if (!selectedGame) return
-                        const confirmed = window.confirm(
-                          'Reset winners and reactivate all employees for this game? This cannot be undone.',
-                        )
-                        if (!confirmed) return
-                        try {
-                          await request(`/api/admin/${selectedGame}/winners/reset`, { method: 'POST' })
-                          await fetchEmployees()
-                          await fetchWinners()
-                          setError('')
-                        } catch (err) {
-                          setError(err.message)
-                        }
+                        setConfirmReset(true)
                       }}
                     >
                       Reset Winners
@@ -891,6 +939,53 @@ const AdminPanel = () => {
           )}
         </div>
       </section>
+
+      {(uiNotice || confirmReset) && (
+        <div className="admin-modal" role="dialog" aria-modal="true">
+          <div className="admin-modal__card">
+            <div className="admin-card__header">
+              <h3>{confirmReset ? 'Confirm reset' : 'Success'}</h3>
+            </div>
+            <p className="admin-modal__message">
+              {confirmReset
+                ? 'Reset winners and reactivate all employees for this game? This cannot be undone.'
+                : uiNotice}
+            </p>
+            <div className="admin-form__inline admin-form__inline--row">
+              {confirmReset ? (
+                <>
+                  <button type="button" className="admin-form__button" onClick={() => setConfirmReset(false)}>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="admin-form__button admin-form__button--danger"
+                    onClick={async () => {
+                      if (!selectedGame) return
+                      try {
+                        await request(`/api/admin/${selectedGame}/winners/reset`, { method: 'POST' })
+                        await loadGameDetails()
+                        setError('')
+                        setConfirmReset(false)
+                        setUiNotice('Winners reset.')
+                      } catch (err) {
+                        setConfirmReset(false)
+                        setError(err.message)
+                      }
+                    }}
+                  >
+                    Reset Winners
+                  </button>
+                </>
+              ) : (
+                <button type="button" className="admin-form__button" onClick={() => setUiNotice(null)}>
+                  OK
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

@@ -21,6 +21,7 @@ const {
   getRecentWinners,
   insertWinner,
   updateWinnerGift,
+  updateWinnerGifts,
   deleteWinnersForGame,
   getRecentWinnerIds,
   getWinnerSequence,
@@ -366,6 +367,17 @@ app.patch('/api/admin/:slug/winners/:id', requireAdmin, (req, res) => {
   const gift = req.body?.gift ?? ''
   const updated = updateWinnerGift(req.params.id, gift)
   res.json({ winner: updated })
+})
+
+app.patch('/api/admin/:slug/winners', requireAdmin, (req, res) => {
+  const game = respondGame(req.params.slug, res)
+  if (!game) return
+  const updates = Array.isArray(req.body?.updates) ? req.body.updates : []
+  if (!updates.length) {
+    return res.status(400).json({ message: 'updates are required' })
+  }
+  updateWinnerGifts(game.slug, updates)
+  res.status(204).end()
 })
 
 app.post('/api/admin/:slug/employees', requireAdmin, (req, res) => {
