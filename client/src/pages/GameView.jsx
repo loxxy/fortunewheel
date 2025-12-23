@@ -9,7 +9,7 @@ const IDLE_INTERVAL_MS = 60
 const SPIN_DURATION_MS = 5200
 const MAX_WHEEL_SLICES = 120
 const MAX_BUCKETS = 80
-const WINNER_DISPLAY_COUNT = 10
+const WINNER_DISPLAY_COUNT = 100
 
 const shuffleEmployees = (list) => {
   if (!Array.isArray(list)) return []

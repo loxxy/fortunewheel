@@ -14,7 +14,7 @@ const DAY_OPTIONS = [
   { value: 'SAT', label: 'Saturday' },
 ]
 const RUN_ONCE_PLACEHOLDER_CRON = '0 0 * * *'
-const WINNER_DISPLAY_COUNT = 10
+const WINNER_DISPLAY_COUNT = 100
 
 const defaultScheduleState = () => ({
   mode: 'repeat',
