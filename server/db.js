@@ -12,6 +12,7 @@ function ensureGameScheduleColumns() {
   const hasSchedulePayload = columns.some((column) => column.name === 'schedule_payload')
   const hasAllowRepeat = columns.some((column) => column.name === 'allow_repeat_winners')
   const hasGifts = columns.some((column) => column.name === 'gifts')
+  const hasAdminPassword = columns.some((column) => column.name === 'admin_password')
   if (!hasScheduleType) {
     db.prepare("ALTER TABLE games ADD COLUMN schedule_type TEXT DEFAULT 'repeat'").run()
   }
@@ -23,6 +24,9 @@ function ensureGameScheduleColumns() {
   }
   if (!hasGifts) {
     db.prepare('ALTER TABLE games ADD COLUMN gifts TEXT DEFAULT ""').run()
+  }
+  if (!hasAdminPassword) {
+    db.prepare('ALTER TABLE games ADD COLUMN admin_password TEXT DEFAULT ""').run()
   }
   db.prepare("UPDATE games SET schedule_type = COALESCE(schedule_type, 'repeat')").run()
 }
@@ -106,6 +110,7 @@ db.prepare(`
     timezone TEXT NOT NULL,
     allow_repeat_winners INTEGER DEFAULT 0,
     gifts TEXT DEFAULT '',
+    admin_password TEXT DEFAULT '',
     schedule_type TEXT DEFAULT 'repeat',
     schedule_payload TEXT,
     created_at TEXT NOT NULL
@@ -124,6 +129,7 @@ const shapeGame = (row) =>
         timezone: row.timezone,
         allowRepeatWinners: row.allowRepeatWinners === 1,
         gifts: row.gifts || '',
+        adminPassword: row.adminPassword || '',
         scheduleType: row.scheduleType,
         schedulePayload: row.schedulePayload,
         createdAt: row.createdAt,
@@ -196,7 +202,7 @@ function getGames() {
     .prepare(
       `SELECT slug, name, cron, timezone, schedule_type AS scheduleType,
               schedule_payload AS schedulePayload, allow_repeat_winners AS allowRepeatWinners,
-              gifts, created_at AS createdAt
+              gifts, admin_password AS adminPassword, created_at AS createdAt
        FROM games
        ORDER BY created_at`,
     )
@@ -209,7 +215,7 @@ function getGame(slug) {
     .prepare(
       `SELECT slug, name, cron, timezone, schedule_type AS scheduleType,
               schedule_payload AS schedulePayload, allow_repeat_winners AS allowRepeatWinners,
-              gifts, created_at AS createdAt
+              gifts, admin_password AS adminPassword, created_at AS createdAt
        FROM games
        WHERE slug = ?`,
     )
@@ -234,12 +240,13 @@ function createGame({
   timezone,
   allowRepeatWinners = false,
   gifts = '',
+  adminPassword = '',
   scheduleType = 'repeat',
   schedulePayload = null,
 }) {
   const payload = serializeSchedulePayload(schedulePayload)
   db.prepare(
-    'INSERT INTO games (slug, name, cron, timezone, allow_repeat_winners, gifts, schedule_type, schedule_payload, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO games (slug, name, cron, timezone, allow_repeat_winners, gifts, admin_password, schedule_type, schedule_payload, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
   ).run(
     slug,
     name,
@@ -247,6 +254,7 @@ function createGame({
     timezone,
     allowRepeatWinners ? 1 : 0,
     gifts || '',
+    adminPassword || '',
     scheduleType,
     payload,
     new Date().toISOString(),
@@ -276,6 +284,10 @@ function updateGame(slug, data) {
   if (typeof data.gifts === 'string') {
     fields.push('gifts = ?')
     values.push(data.gifts)
+  }
+  if (Object.prototype.hasOwnProperty.call(data, 'adminPassword')) {
+    fields.push('admin_password = ?')
+    values.push(data.adminPassword || '')
   }
   if (data.scheduleType) {
     fields.push('schedule_type = ?')

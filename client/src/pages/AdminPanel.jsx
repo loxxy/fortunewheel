@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useParams } from 'react-router-dom'
 import '../App.css'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
@@ -297,7 +298,10 @@ const ScheduleControls = ({ schedule, onChange, name = 'schedule-mode' }) => {
 }
 
 const AdminPanel = () => {
-  const [secret, setSecret] = useState(() => localStorage.getItem(STORAGE_KEY) || '')
+  const { slug: routeSlug } = useParams()
+  const isGameAdmin = Boolean(routeSlug)
+  const storageKey = isGameAdmin ? `${STORAGE_KEY}:${routeSlug}` : STORAGE_KEY
+  const [secret, setSecret] = useState(() => localStorage.getItem(storageKey) || '')
   const [passwordInput, setPasswordInput] = useState('')
   const [authError, setAuthError] = useState('')
   const [games, setGames] = useState([])
@@ -306,6 +310,7 @@ const AdminPanel = () => {
   const [editingSchedule, setEditingSchedule] = useState(() => defaultScheduleState())
   const [allowRepeats, setAllowRepeats] = useState(true)
   const [gifts, setGifts] = useState('')
+  const [adminPassword, setAdminPassword] = useState('')
   const [roster, setRoster] = useState([])
   const [bulkAddInput, setBulkAddInput] = useState('')
   const [winners, setWinners] = useState([])
@@ -318,9 +323,14 @@ const AdminPanel = () => {
   const [error, setError] = useState('')
   const [isCreating, setIsCreating] = useState(false)
   const [uiNotice, setUiNotice] = useState(null)
+  const [uiNoticeType, setUiNoticeType] = useState('success')
   const [confirmReset, setConfirmReset] = useState(false)
 
   const authed = Boolean(secret)
+
+  useEffect(() => {
+    setSecret(localStorage.getItem(storageKey) || '')
+  }, [storageKey])
 
   const request = useCallback(
     async (path, options = {}) => {
@@ -358,14 +368,15 @@ const AdminPanel = () => {
         headers: {
           'Content-Type': 'application/json',
           'x-admin-password': passwordInput,
+          ...(isGameAdmin ? { 'x-game-slug': routeSlug } : {}),
         },
-        body: JSON.stringify({ password: passwordInput }),
+        body: JSON.stringify({ password: passwordInput, slug: routeSlug }),
       })
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}))
         throw new Error(payload.message || 'Invalid password')
       }
-      localStorage.setItem(STORAGE_KEY, passwordInput)
+      localStorage.setItem(storageKey, passwordInput)
       setSecret(passwordInput)
       setPasswordInput('')
       setAuthError('')
@@ -376,6 +387,7 @@ const AdminPanel = () => {
 
   const fetchGames = useCallback(async () => {
     if (!authed) return
+    if (isGameAdmin) return
     setLoading(true)
     try {
       const result = await request('/api/admin/games')
@@ -391,9 +403,31 @@ const AdminPanel = () => {
     }
   }, [authed, request, selectedGame, isCreating])
 
+  const fetchSingleGame = useCallback(async () => {
+    if (!authed || !routeSlug) return
+    setLoading(true)
+    try {
+      const result = await request(`/api/admin/${routeSlug}`)
+      if (result?.game) {
+        setGames([result.game])
+        setSelectedGame(routeSlug)
+        setFormSlug(routeSlug)
+      }
+      setError('')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [authed, request, routeSlug])
+
   useEffect(() => {
-    fetchGames()
-  }, [fetchGames])
+    if (isGameAdmin) {
+      fetchSingleGame()
+    } else {
+      fetchGames()
+    }
+  }, [fetchGames, fetchSingleGame, isGameAdmin])
 
   const fetchEmployees = useCallback(
     async (overrideSlug) => {
@@ -456,6 +490,13 @@ const AdminPanel = () => {
     }
   }, [loadGameDetails, isCreating])
 
+  useEffect(() => {
+    if (isGameAdmin && routeSlug) {
+      setIsCreating(false)
+      setSelectedGame(routeSlug)
+    }
+  }, [isGameAdmin, routeSlug])
+
   const handleAddBulk = () => {
     const entries = parseRosterText(bulkAddInput)
     if (!entries.length) {
@@ -472,9 +513,8 @@ const AdminPanel = () => {
       if (existingKeys.has(key) || localKeys.has(key)) {
         const name = `${entry.firstName} ${entry.lastName}`.trim()
         setError(`Duplicate name: ${name}`)
-        if (typeof window !== 'undefined') {
-          window.alert(`Duplicate name: ${name}`)
-        }
+        setUiNoticeType('error')
+        setUiNotice(`Duplicate name: ${name}`)
         return
       }
       localKeys.add(key)
@@ -486,6 +526,7 @@ const AdminPanel = () => {
     setRoster((prev) => [...prev, ...enriched])
     setBulkAddInput('')
     setError('')
+    setUiNoticeType('success')
     setUiNotice(`Added ${entries.length} name${entries.length === 1 ? '' : 's'} to the list.`)
   }
 
@@ -523,6 +564,7 @@ const AdminPanel = () => {
       })
       await fetchWinners()
       setError('')
+      setUiNoticeType('success')
       setUiNotice('Winner gifts updated.')
     } catch (err) {
       setError(err.message)
@@ -535,6 +577,7 @@ const AdminPanel = () => {
 
 
   const handleSelectGame = (slug) => {
+    if (isGameAdmin) return
     setIsCreating(false)
     setError('')
     setSelectedGame(slug)
@@ -543,6 +586,7 @@ const AdminPanel = () => {
     setIsLoadingDetails(true)
     setAllowRepeats(true)
     setGifts('')
+    setAdminPassword('')
     setRoster([])
     setWinnerGifts({})
     setEditingSchedule(defaultScheduleState())
@@ -559,12 +603,14 @@ const AdminPanel = () => {
       setEditingSchedule(deriveScheduleState(currentGame))
       setAllowRepeats(currentGame.allowRepeatWinners ?? true)
       setGifts(currentGame.gifts || '')
+      setAdminPassword(currentGame.adminPassword || '')
       setFormSlug(currentGame.slug)
       setDetailStatus('')
     } else if (isCreating) {
       setEditingSchedule(defaultScheduleState())
       setAllowRepeats(true)
       setGifts('')
+      setAdminPassword('')
       setFormSlug('')
       setDetailStatus('Ready to create a new game.')
     } else {
@@ -576,7 +622,7 @@ const AdminPanel = () => {
     return (
       <main className="app-shell">
         <section className="admin-login">
-          <h1>Wheel Admin</h1>
+          <h1>{isGameAdmin ? `Game Admin · ${routeSlug}` : 'Wheel Admin'}</h1>
           <form onSubmit={handleLogin} className="admin-form">
             <label htmlFor="admin-password">Password</label>
             <input
@@ -598,13 +644,17 @@ const AdminPanel = () => {
     <main className="admin-shell">
       <header className="admin-header">
         <div>
-          <h1>Wheel Admin</h1>
-          <p>Manage games, schedules, and employee rosters.</p>
+          <h1>{isGameAdmin ? `Game Admin · ${routeSlug}` : 'Wheel Admin'}</h1>
+          <p>
+            {isGameAdmin
+              ? 'Manage this game’s schedule, roster, and winners.'
+              : 'Manage games, schedules, and employee rosters.'}
+          </p>
         </div>
         <button
           type="button"
           onClick={() => {
-            localStorage.removeItem(STORAGE_KEY)
+            localStorage.removeItem(storageKey)
             setSecret('')
             setGames([])
             setRoster([])
@@ -630,23 +680,26 @@ const AdminPanel = () => {
       <section className="admin-split">
         <div className="admin-card admin-card--games">
           <div className="admin-card__header">
-            <h2>Games</h2>
-            <button
-              type="button"
-              onClick={() => {
-                setIsCreating(true)
-                setSelectedGame('')
-                setFormSlug('')
-                setRoster([])
-                setEditingSchedule(defaultScheduleState())
-                setAllowRepeats(true)
-                setGifts('')
-                setDetailStatus('Ready to create a new game.')
-                setActiveTab('config')
-              }}
-            >
-              Create game
-            </button>
+            <h2>{isGameAdmin ? 'Game' : 'Games'}</h2>
+            {!isGameAdmin && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCreating(true)
+                  setSelectedGame('')
+                  setFormSlug('')
+                  setRoster([])
+                  setEditingSchedule(defaultScheduleState())
+                  setAllowRepeats(true)
+                  setGifts('')
+                  setAdminPassword('')
+                  setDetailStatus('Ready to create a new game.')
+                  setActiveTab('config')
+                }}
+              >
+                Create game
+              </button>
+            )}
           </div>
           {loading ? (
             <p>Loading games…</p>
@@ -656,8 +709,13 @@ const AdminPanel = () => {
                 <li key={game.slug}>
                   <button
                     type="button"
-                    className={game.slug === selectedGame && !isCreating ? 'admin-list__item admin-list__item--active' : 'admin-list__item'}
+                    className={
+                      game.slug === selectedGame && !isCreating
+                        ? 'admin-list__item admin-list__item--active'
+                        : 'admin-list__item'
+                    }
                     onClick={() => handleSelectGame(game.slug)}
+                    disabled={isGameAdmin}
                   >
                     <span>{game.slug}</span>
                     {game.slug === selectedGame && !isCreating && <span className="admin-list__tag">Editing</span>}
@@ -716,30 +774,41 @@ const AdminPanel = () => {
                     setSavingStatus(isCreating ? 'Creating game…' : 'Saving game…')
                     try {
                       const scheduleRequest = buildScheduleRequest(editingSchedule)
-                      if (isCreating) {
+                    if (isCreating) {
                         await request('/api/admin/games', {
                           method: 'POST',
                           body: JSON.stringify({
                             slug: targetSlug,
                             allowRepeatWinners: allowRepeats,
                             gifts,
+                            adminPassword,
                             ...scheduleRequest,
                           }),
                         })
                       } else if (currentGame?.slug) {
                         await request(`/api/admin/${currentGame.slug}/config`, {
                           method: 'PATCH',
-                          body: JSON.stringify({ ...scheduleRequest, allowRepeatWinners: allowRepeats, gifts }),
+                          body: JSON.stringify({
+                            ...scheduleRequest,
+                            allowRepeatWinners: allowRepeats,
+                            gifts,
+                            adminPassword,
+                          }),
                         })
                       }
                       await saveRosterForSlug(targetSlug)
-                      await fetchGames()
+                      if (isGameAdmin) {
+                        await fetchSingleGame()
+                      } else {
+                        await fetchGames()
+                      }
                       await loadGameDetails(targetSlug)
                       setSelectedGame(targetSlug)
                       setIsCreating(false)
                       setFormSlug(targetSlug)
                       setDetailStatus('')
                       setError('')
+                      setUiNoticeType('success')
                       setUiNotice(isCreating ? 'Game created.' : 'Game saved.')
                     } catch (err) {
                       setError(err.message)
@@ -775,6 +844,16 @@ const AdminPanel = () => {
                       value={gifts}
                       onChange={(event) => setGifts(event.target.value)}
                       placeholder="Mug, T-shirt, Gift card"
+                    />
+                  </div>
+                  <div className="admin-form__group">
+                    <label htmlFor="game-admin-password">Game admin password</label>
+                    <input
+                      id="game-admin-password"
+                      type="password"
+                      value={adminPassword}
+                      onChange={(event) => setAdminPassword(event.target.value)}
+                      placeholder="Set a password for /your-game/admin"
                     />
                   </div>
                   <label className="checkbox-inline">
@@ -944,7 +1023,7 @@ const AdminPanel = () => {
         <div className="admin-modal" role="dialog" aria-modal="true">
           <div className="admin-modal__card">
             <div className="admin-card__header">
-              <h3>{confirmReset ? 'Confirm reset' : 'Success'}</h3>
+              <h3>{confirmReset ? 'Confirm reset' : uiNoticeType === 'error' ? 'Error' : 'Success'}</h3>
             </div>
             <p className="admin-modal__message">
               {confirmReset
@@ -967,6 +1046,7 @@ const AdminPanel = () => {
                         await loadGameDetails()
                         setError('')
                         setConfirmReset(false)
+                        setUiNoticeType('success')
                         setUiNotice('Winners reset.')
                       } catch (err) {
                         setConfirmReset(false)
@@ -978,7 +1058,14 @@ const AdminPanel = () => {
                   </button>
                 </>
               ) : (
-                <button type="button" className="admin-form__button" onClick={() => setUiNotice(null)}>
+                <button
+                  type="button"
+                  className="admin-form__button"
+                  onClick={() => {
+                    setUiNotice(null)
+                    setUiNoticeType('success')
+                  }}
+                >
                   OK
                 </button>
               )}

@@ -227,10 +227,30 @@ function drawWinner(slug, trigger = 'manual') {
   return winner
 }
 
-function requireAdmin(req, res, next) {
+function requireSuperAdmin(req, res, next) {
   const auth = req.headers.authorization || ''
   const token = auth.replace('Bearer ', '')
   if (token !== ADMIN_PASSWORD) {
+    return res.status(401).json({ message: 'Admin authentication required' })
+  }
+  return next()
+}
+
+function requireGameAdmin(req, res, next) {
+  const auth = req.headers.authorization || ''
+  const token = auth.replace('Bearer ', '')
+  if (token === ADMIN_PASSWORD) {
+    return next()
+  }
+  const slug = req.params.slug
+  if (!slug) {
+    return res.status(401).json({ message: 'Admin authentication required' })
+  }
+  const game = getGame(slug)
+  if (!game) {
+    return res.status(404).json({ message: 'Game not found' })
+  }
+  if (!game.adminPassword || token !== game.adminPassword) {
     return res.status(401).json({ message: 'Admin authentication required' })
   }
   return next()
@@ -292,21 +312,31 @@ app.post('/api/admin/login', (req, res) => {
     req.headers['x-admin-password'] ||
     req.query.password ||
     ''
-
-    console.log(password," | " ,ADMIN_PASSWORD);
+  const slug = req.body?.slug || req.headers['x-game-slug'] || req.query.slug || ''
   if (password === ADMIN_PASSWORD) {
     res.json({ success: true })
-  } else {
-    res.status(401).json({ message: 'Invalid password' })
+    return
   }
+  if (slug) {
+    const game = getGame(slug)
+    if (!game) {
+      res.status(404).json({ message: 'Game not found' })
+      return
+    }
+    if (game.adminPassword && password === game.adminPassword) {
+      res.json({ success: true })
+      return
+    }
+  }
+  res.status(401).json({ message: 'Invalid password' })
 })
 
-app.get('/api/admin/games', requireAdmin, (_req, res) => {
+app.get('/api/admin/games', requireSuperAdmin, (_req, res) => {
   res.json({ games: getGames() })
 })
 
-app.post('/api/admin/games', requireAdmin, (req, res) => {
-  const { slug, cron, scheduleType, schedulePayload, allowRepeatWinners, gifts } = req.body || {}
+app.post('/api/admin/games', requireSuperAdmin, (req, res) => {
+  const { slug, cron, scheduleType, schedulePayload, allowRepeatWinners, gifts, adminPassword } = req.body || {}
   if (!slug) {
     return res.status(400).json({ message: 'slug is required' })
   }
@@ -322,6 +352,7 @@ app.post('/api/admin/games', requireAdmin, (req, res) => {
       scheduleType: type,
       schedulePayload: payload,
       gifts: gifts || '',
+      adminPassword: adminPassword || '',
       allowRepeatWinners: allowRepeatWinners ? 1 : 0,
     })
     scheduleGame(game)
@@ -331,7 +362,13 @@ app.post('/api/admin/games', requireAdmin, (req, res) => {
   }
 })
 
-app.patch('/api/admin/:slug/config', requireAdmin, (req, res) => {
+app.get('/api/admin/:slug', requireGameAdmin, (req, res) => {
+  const game = respondGame(req.params.slug, res)
+  if (!game) return
+  res.json({ game })
+})
+
+app.patch('/api/admin/:slug/config', requireGameAdmin, (req, res) => {
   const game = respondGame(req.params.slug, res)
   if (!game) return
   const type = req.body?.scheduleType === 'once' ? 'once' : req.body?.scheduleType || game.scheduleType || 'repeat'
@@ -345,6 +382,7 @@ app.patch('/api/admin/:slug/config', requireAdmin, (req, res) => {
     timezone: DEFAULT_TZ,
     allowRepeatWinners: typeof req.body?.allowRepeatWinners === 'boolean' ? req.body.allowRepeatWinners : game.allowRepeatWinners,
     gifts: typeof req.body?.gifts === 'string' ? req.body.gifts : game.gifts,
+    adminPassword: typeof req.body?.adminPassword === 'string' ? req.body.adminPassword : game.adminPassword,
     scheduleType: type,
     schedulePayload: req.body?.schedulePayload || null,
   })
@@ -355,13 +393,13 @@ app.patch('/api/admin/:slug/config', requireAdmin, (req, res) => {
   res.json({ game: updated })
 })
 
-app.get('/api/admin/:slug/employees', requireAdmin, (req, res) => {
+app.get('/api/admin/:slug/employees', requireGameAdmin, (req, res) => {
   const game = respondGame(req.params.slug, res)
   if (!game) return
   res.json({ employees: getEmployees(game.slug) })
 })
 
-app.patch('/api/admin/:slug/winners/:id', requireAdmin, (req, res) => {
+app.patch('/api/admin/:slug/winners/:id', requireGameAdmin, (req, res) => {
   const game = respondGame(req.params.slug, res)
   if (!game) return
   const gift = req.body?.gift ?? ''
@@ -369,7 +407,7 @@ app.patch('/api/admin/:slug/winners/:id', requireAdmin, (req, res) => {
   res.json({ winner: updated })
 })
 
-app.patch('/api/admin/:slug/winners', requireAdmin, (req, res) => {
+app.patch('/api/admin/:slug/winners', requireGameAdmin, (req, res) => {
   const game = respondGame(req.params.slug, res)
   if (!game) return
   const updates = Array.isArray(req.body?.updates) ? req.body.updates : []
@@ -380,7 +418,7 @@ app.patch('/api/admin/:slug/winners', requireAdmin, (req, res) => {
   res.status(204).end()
 })
 
-app.post('/api/admin/:slug/employees', requireAdmin, (req, res) => {
+app.post('/api/admin/:slug/employees', requireGameAdmin, (req, res) => {
   const game = respondGame(req.params.slug, res)
   if (!game) return
   const { firstName } = req.body || {}
@@ -391,21 +429,21 @@ app.post('/api/admin/:slug/employees', requireAdmin, (req, res) => {
   res.status(201).json({ employee })
 })
 
-app.patch('/api/admin/:slug/employees/:id', requireAdmin, (req, res) => {
+app.patch('/api/admin/:slug/employees/:id', requireGameAdmin, (req, res) => {
   const game = respondGame(req.params.slug, res)
   if (!game) return
   const employee = updateEmployee(game.slug, Number(req.params.id), req.body || {})
   res.json({ employee })
 })
 
-app.delete('/api/admin/:slug/employees/:id', requireAdmin, (req, res) => {
+app.delete('/api/admin/:slug/employees/:id', requireGameAdmin, (req, res) => {
   const game = respondGame(req.params.slug, res)
   if (!game) return
   deleteEmployee(game.slug, Number(req.params.id))
   res.status(204).end()
 })
 
-app.put('/api/admin/:slug/employees', requireAdmin, (req, res) => {
+app.put('/api/admin/:slug/employees', requireGameAdmin, (req, res) => {
   const game = respondGame(req.params.slug, res)
   if (!game) return
   const roster = Array.isArray(req.body?.employees) ? req.body.employees : []
@@ -427,7 +465,7 @@ app.put('/api/admin/:slug/employees', requireAdmin, (req, res) => {
   res.json({ employees: updated })
 })
 
-app.post('/api/admin/:slug/winners/reset', requireAdmin, (req, res) => {
+app.post('/api/admin/:slug/winners/reset', requireGameAdmin, (req, res) => {
   const game = respondGame(req.params.slug, res)
   if (!game) return
   deleteWinnersForGame(game.slug)
@@ -435,7 +473,7 @@ app.post('/api/admin/:slug/winners/reset', requireAdmin, (req, res) => {
   res.status(204).end()
 })
 
-app.get('/api/admin/:slug/winners/export', requireAdmin, (req, res) => {
+app.get('/api/admin/:slug/winners/export', requireGameAdmin, (req, res) => {
   const game = respondGame(req.params.slug, res)
   if (!game) return
   const limitRaw = parseInt(req.query.limit, 10)

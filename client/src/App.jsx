@@ -9,6 +9,8 @@ const App = () => (
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/admin" element={<AdminPanel />} />
+      <Route path="/:slug/admin" element={<AdminPanel />} />
+      <Route path="/:slug/kiosk" element={<GameView />} />
       <Route path="/:slug" element={<GameView />} />
       <Route path="*" element={<NotFound />} />
     </Routes>

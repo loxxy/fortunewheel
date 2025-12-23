@@ -9,8 +9,10 @@ Browser-based fortune wheel for employee lucky draws. Any slug (sales, ops, tech
 - **Always-on wheel** – SVG wheel idles smoothly, ticks every employee transition, and spins automatically at scheduled draws.
 - **Timed celebrations** – Winners trigger a confetti/chime overlay before their names move into the recent list.
 - **Multi-game support** – Every slug (e.g. `/aas`, `/office`) has its own roster, schedule, and history in SQLite.
-- **Admin console** – `/admin` offers a password-gated UI to create games, pick repeat vs. once-off spins, and bulk-manage employees via comma-separated lists.
+- **Admin console** – `/admin` offers a super-admin UI to create games, configure schedules, set gift rotations, and bulk-manage employees.
+- **Game-level admin** – `/<slug>/admin` lets a per-game admin manage only that game, using a game-specific password.
 - **Snapshot winners** – Names are stored with the draw, so removing employees never retroactively “breaks” history.
+- **Kiosk mode** – `/<slug>/kiosk` hides the roster button and shows a QR code pointing to the non-kiosk URL.
 
 ## Stack
 
@@ -21,10 +23,11 @@ Browser-based fortune wheel for employee lucky draws. Any slug (sales, ops, tech
 
 ## How it Works
 
-1. Visit `/admin`, enter the password from `.env`, and create a game by picking a slug (e.g. `sales`, `ops`, `tech`).
+1. Visit `/admin`, enter the super-admin password from `.env`, and create a game by picking a slug (e.g. `sales`, `ops`, `tech`).
 2. Choose a schedule: repeat every minute/hour/day/week, or run once on a specific date/time.
-3. Paste comma-separated employee names; the wheel automatically rotates through their initials and snapshots.
-4. Display `/<slug>` anywhere (TV, browser tab, etc.). The wheel keeps spinning, plays ticking audio, and automatically reveals winners when the scheduled draw hits.
+3. Add comma-separated employee names; duplicates are blocked and the roster updates immediately.
+4. Optionally set a game admin password and share `/<slug>/admin` for that game only.
+5. Display `/<slug>` anywhere (TV, browser tab, etc.). For kiosk displays, use `/<slug>/kiosk`.
 
 The backend stores all rosters, schedules, and winners in SQLite and exposes `/api/:slug/...` endpoints for the client. Winners include the name snapshot taken at draw time, so removing employees later never breaks history.
 
@@ -38,3 +41,17 @@ npm run server                # serves API + built UI on PORT (default 4000)
 ```
 
 Set any overrides in `.env` (e.g., `PORT`, `ADMIN_PASSWORD`, `VITE_CLIENT_PORT`) before starting the server. Once running, visit `/admin` to configure games and `/<slug>` to display a wheel.
+
+## Admin Features
+
+- **Configuration**: schedule builder (repeat/once), allow repeat winners, and gift rotation list (comma separated).
+- **Manage Employees**: bulk add names, roster list with active/inactive status, and delete entries.
+- **Manage Winners**: edit gift per winner, save changes in bulk, export winners as CSV, and reset winners (reactivates employees).
+- **Recent winners**: the UI shows the most recent 100 winners with gift names.
+
+## Routes
+
+- `/admin` – super admin dashboard (all games).
+- `/<slug>` – game view.
+- `/<slug>/kiosk` – kiosk view with QR code to `/<slug>`.
+- `/<slug>/admin` – game admin dashboard (single game).

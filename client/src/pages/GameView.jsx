@@ -54,14 +54,11 @@ const GameView = () => {
     }
     const origin = window.location.origin.replace(/\/$/, '')
     const { pathname, search } = window.location
-    const params = new URLSearchParams(search)
-    const isKiosk = params.get('mode') === 'kiosk'
-    if (isKiosk) {
-      params.delete('mode')
-    }
-    const query = params.toString()
-    const pathWithQuery = query ? `${pathname}?${query}` : pathname
-    return { rosterUrl: `${origin}${pathWithQuery || '/'}`, isKioskMode: isKiosk }
+    const isKiosk = /\/kiosk\/?$/.test(pathname)
+    const basePath = isKiosk ? pathname.replace(/\/kiosk\/?$/, '') || '/' : pathname || '/'
+    const query = search ? search : ''
+    const pathWithQuery = `${basePath}${query}`
+    return { rosterUrl: `${origin}${pathWithQuery}`, isKioskMode: isKiosk }
   }, [])
 
   const [employees, setEmployees] = useState([])
