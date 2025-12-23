@@ -648,7 +648,7 @@ const AdminPanel = () => {
           <p>
             {isGameAdmin
               ? 'Manage this game’s schedule, roster, and winners.'
-              : 'Manage games, schedules, and employee rosters.'}
+              : 'Manage games, schedules, and participant rosters.'}
           </p>
         </div>
         <button
@@ -748,7 +748,7 @@ const AdminPanel = () => {
                   className={activeTab === 'employees' ? 'admin-tab admin-tab--active' : 'admin-tab'}
                   onClick={() => setActiveTab('employees')}
                 >
-                  Manage Employees
+                  Manage Participants
                 </button>
                 <button
                   type="button"
@@ -876,7 +876,7 @@ const AdminPanel = () => {
               {activeTab === 'employees' && (
                 <div className="admin-card admin-card--roster">
                 <div className="admin-card__header">
-                  <h3>Employee List · {formSlug || currentGame?.slug || 'new'}</h3>
+                  <h3>Participant List · {formSlug || currentGame?.slug || 'new'}</h3>
                   <span>{roster.length} names</span>
                 </div>
                 <div className="roster-table">
@@ -907,7 +907,7 @@ const AdminPanel = () => {
                       )
                     })
                   ) : (
-                    <p className="roster-table__empty">No employees yet.</p>
+                    <p className="roster-table__empty">No participants yet.</p>
                   )}
                 </div>
                 <div className="admin-form__group">
@@ -1027,7 +1027,7 @@ const AdminPanel = () => {
             </div>
             <p className="admin-modal__message">
               {confirmReset
-                ? 'Reset winners and reactivate all employees for this game? This cannot be undone.'
+                ? 'Reset winners and reactivate all participants for this game? This cannot be undone.'
                 : uiNotice}
             </p>
             <div className="admin-form__inline admin-form__inline--row">

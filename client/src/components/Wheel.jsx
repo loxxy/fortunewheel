@@ -18,7 +18,7 @@ const Wheel = ({ employees, rotation, isSpinning, highlightedId }) => {
   if (!employees.length) {
     return (
       <div className="wheel-empty">
-        <p>Add employees to start spinning.</p>
+        <p>Add participants to start spinning.</p>
       </div>
     )
   }

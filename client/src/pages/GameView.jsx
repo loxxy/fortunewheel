@@ -548,7 +548,7 @@ const GameView = () => {
         <div className="roster-modal" role="dialog" aria-modal="true">
           <div className="roster-modal__card">
             <div className="roster-modal__header">
-              <h3>Roster ({employees.length})</h3>
+              <h3>Participants ({employees.length})</h3>
               <button type="button" className="roster-modal__close" onClick={() => setIsRosterOpen(false)}>
                 ×
               </button>
@@ -564,7 +564,7 @@ const GameView = () => {
                   </div>
                 ))
               ) : (
-                <p className="roster-modal__empty">No employees yet.</p>
+                <p className="roster-modal__empty">No participants yet.</p>
               )}
             </div>
           </div>
@@ -582,7 +582,7 @@ const GameView = () => {
           <div className="roster-fab-wrap">
             {!isKioskMode && (
               <button type="button" className="roster-fab" onClick={() => setIsRosterOpen(true)}>
-                Roster ({employees.length})
+                Participants ({employees.length})
               </button>
             )}
             {isKioskMode && rosterUrl ? (
