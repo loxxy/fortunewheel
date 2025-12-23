@@ -14,6 +14,7 @@ const DAY_OPTIONS = [
   { value: 'SAT', label: 'Saturday' },
 ]
 const RUN_ONCE_PLACEHOLDER_CRON = '0 0 * * *'
+const WINNER_DISPLAY_COUNT = 10
 
 const defaultScheduleState = () => ({
   mode: 'repeat',
@@ -307,6 +308,8 @@ const AdminPanel = () => {
   const [gifts, setGifts] = useState('')
   const [roster, setRoster] = useState([])
   const [bulkAddInput, setBulkAddInput] = useState('')
+  const [winners, setWinners] = useState([])
+  const [showWinnersModal, setShowWinnersModal] = useState(false)
   const [loading, setLoading] = useState(false)
   const [detailStatus, setDetailStatus] = useState('')
   const [savingStatus, setSavingStatus] = useState('')
@@ -404,11 +407,26 @@ const AdminPanel = () => {
     [authed, request, selectedGame],
   )
 
+  const fetchWinners = useCallback(
+    async (overrideSlug) => {
+      const targetSlug = overrideSlug || selectedGame
+      if (!authed || !targetSlug) return
+      try {
+        const result = await request(`/api/${targetSlug}/winners?limit=${WINNER_DISPLAY_COUNT}`)
+        setWinners(result.winners ?? [])
+      } catch (err) {
+        setError(err.message)
+      }
+    },
+    [authed, request, selectedGame],
+  )
+
   useEffect(() => {
     if (!isCreating) {
       fetchEmployees()
+      fetchWinners()
     }
-  }, [fetchEmployees, isCreating])
+  }, [fetchEmployees, fetchWinners, isCreating])
 
   const handleAddBulk = () => {
     const entries = parseRosterText(bulkAddInput)
@@ -454,6 +472,20 @@ const AdminPanel = () => {
     },
     [request, roster],
   )
+
+  const handleUpdateWinnerGift = async (winnerId, gift) => {
+    if (!selectedGame) return
+    try {
+      await request(`/api/admin/${selectedGame}/winners/${winnerId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ gift }),
+      })
+      await fetchWinners()
+      setError('')
+    } catch (err) {
+      setError(err.message)
+    }
+  }
 
   const handleRemoveEmployee = (index) => {
     setRoster((prev) => prev.filter((_, idx) => idx !== index))
@@ -623,6 +655,7 @@ const AdminPanel = () => {
                       await saveRosterForSlug(targetSlug)
                       await fetchGames()
                       await fetchEmployees(targetSlug)
+                      await fetchWinners(targetSlug)
                       setSelectedGame(targetSlug)
                       setIsCreating(false)
                       setFormSlug(targetSlug)
@@ -731,23 +764,10 @@ const AdminPanel = () => {
                     </button>
                     <button
                       type="button"
-                      className="admin-form__button admin-form__button--danger"
-                      onClick={async () => {
-                        if (!selectedGame) return
-                        const confirmed = window.confirm(
-                          'Reset winners and reactivate all employees for this game? This cannot be undone.',
-                        )
-                        if (!confirmed) return
-                        try {
-                          await request(`/api/admin/${selectedGame}/winners/reset`, { method: 'POST' })
-                          await fetchEmployees()
-                          setError('')
-                        } catch (err) {
-                          setError(err.message)
-                        }
-                      }}
+                      className="admin-form__button"
+                      onClick={() => setShowWinnersModal(true)}
                     >
-                      Reset Winners
+                      Manage Winners
                     </button>
                     <button
                       type="button"
@@ -781,6 +801,7 @@ const AdminPanel = () => {
                   </div>
                 </div>
               </div>
+
             </div>
           ) : (
             <div className="admin-empty-state">
@@ -790,6 +811,67 @@ const AdminPanel = () => {
           )}
         </div>
       </section>
+
+      {showWinnersModal && (
+        <div className="admin-modal" role="dialog" aria-modal="true">
+          <div className="admin-modal__card">
+            <div className="admin-card__header">
+              <h3>Recent Winners</h3>
+              <button type="button" onClick={() => setShowWinnersModal(false)}>
+                Close
+              </button>
+            </div>
+            <div className="winner-edit-list">
+              {winners.length ? (
+                winners.map((winner) => (
+                  <div key={winner.id} className="winner-edit-row">
+                    <div className="winner-edit-info">
+                      <p>
+                        {winner.employee
+                          ? `${winner.employee.firstName ?? ''} ${winner.employee.lastName ?? ''}`.trim()
+                          : 'Former Employee'}
+                      </p>
+                      <span>{new Date(winner.drawnAt).toLocaleString()}</span>
+                    </div>
+                    <input
+                      className="winner-edit-input"
+                      type="text"
+                      value={winner.gift || ''}
+                      placeholder="Gift"
+                      onChange={(event) => handleUpdateWinnerGift(winner.id, event.target.value)}
+                    />
+                  </div>
+                ))
+              ) : (
+                <p className="winner-edit-empty">No winners yet.</p>
+              )}
+            </div>
+            <div className="admin-form__inline">
+              <button
+                type="button"
+                className="admin-form__button admin-form__button--danger"
+                onClick={async () => {
+                  if (!selectedGame) return
+                  const confirmed = window.confirm(
+                    'Reset winners and reactivate all employees for this game? This cannot be undone.',
+                  )
+                  if (!confirmed) return
+                  try {
+                    await request(`/api/admin/${selectedGame}/winners/reset`, { method: 'POST' })
+                    await fetchEmployees()
+                    await fetchWinners()
+                    setError('')
+                  } catch (err) {
+                    setError(err.message)
+                  }
+                }}
+              >
+                Reset Winners
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

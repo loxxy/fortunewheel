@@ -392,6 +392,11 @@ function insertWinner({ id, slug, employeeId, trigger, gift = '', snapshot = {} 
   return getWinnerById(id)
 }
 
+function updateWinnerGift(id, gift) {
+  db.prepare('UPDATE winners SET gift = ? WHERE id = ?').run(gift, id)
+  return getWinnerById(id)
+}
+
 function deleteWinnersForGame(slug) {
   db.prepare('DELETE FROM winners WHERE game_slug = ?').run(slug)
 }
@@ -454,6 +459,7 @@ module.exports = {
   getEmployeeById,
   getRecentWinners,
   insertWinner,
+  updateWinnerGift,
   deleteWinnersForGame,
   getRecentWinnerIds,
   getWinnerSequence,

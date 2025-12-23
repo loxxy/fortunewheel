@@ -20,6 +20,7 @@ const {
   deleteEmployee,
   getRecentWinners,
   insertWinner,
+  updateWinnerGift,
   deleteWinnersForGame,
   getRecentWinnerIds,
   getWinnerSequence,
@@ -357,6 +358,14 @@ app.get('/api/admin/:slug/employees', requireAdmin, (req, res) => {
   const game = respondGame(req.params.slug, res)
   if (!game) return
   res.json({ employees: getEmployees(game.slug) })
+})
+
+app.patch('/api/admin/:slug/winners/:id', requireAdmin, (req, res) => {
+  const game = respondGame(req.params.slug, res)
+  if (!game) return
+  const gift = req.body?.gift ?? ''
+  const updated = updateWinnerGift(req.params.id, gift)
+  res.json({ winner: updated })
 })
 
 app.post('/api/admin/:slug/employees', requireAdmin, (req, res) => {

@@ -364,6 +364,73 @@
   gap: 0.8rem;
 }
 
+.admin-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 10, 26, 0.7);
+  display: grid;
+  place-items: center;
+  z-index: 30;
+  padding: 1rem;
+}
+
+.admin-modal__card {
+  width: min(720px, 92vw);
+  max-height: 85vh;
+  overflow: hidden;
+  background: rgba(3, 16, 36, 0.95);
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.winner-edit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.winner-edit-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 160px;
+  gap: 0.8rem;
+  align-items: center;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.winner-edit-info p {
+  margin: 0;
+  font-weight: 600;
+}
+
+.winner-edit-info span {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.winner-edit-input {
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 0.4rem 0.6rem;
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
+  font: inherit;
+}
+
+.winner-edit-empty {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.7);
+}
+
 .roster-table {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
