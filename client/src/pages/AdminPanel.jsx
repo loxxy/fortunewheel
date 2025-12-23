@@ -309,7 +309,7 @@ const AdminPanel = () => {
   const [roster, setRoster] = useState([])
   const [bulkAddInput, setBulkAddInput] = useState('')
   const [winners, setWinners] = useState([])
-  const [showWinnersModal, setShowWinnersModal] = useState(false)
+  const [activeTab, setActiveTab] = useState('config')
   const [loading, setLoading] = useState(false)
   const [detailStatus, setDetailStatus] = useState('')
   const [savingStatus, setSavingStatus] = useState('')
@@ -502,6 +502,7 @@ const AdminPanel = () => {
     setGifts('')
     setRoster([])
     setEditingSchedule(defaultScheduleState())
+    setActiveTab('config')
   }
 
   const currentGame = useMemo(
@@ -572,6 +573,7 @@ const AdminPanel = () => {
             setIsCreating(false)
             setDetailStatus('')
             setSavingStatus('')
+            setActiveTab('config')
           }}
         >
           Sign Out
@@ -595,6 +597,7 @@ const AdminPanel = () => {
                 setAllowRepeats(true)
                 setGifts('')
                 setDetailStatus('Ready to create a new game.')
+                setActiveTab('config')
               }}
             >
               Create game
@@ -621,8 +624,33 @@ const AdminPanel = () => {
 
         <div className="admin-card admin-card--detail">
           {isCreating || currentGame ? (
-            <div className="admin-triple">
-              <div className="admin-card admin-card--panel">
+            <>
+              <div className="admin-tabs">
+                <button
+                  type="button"
+                  className={activeTab === 'config' ? 'admin-tab admin-tab--active' : 'admin-tab'}
+                  onClick={() => setActiveTab('config')}
+                >
+                  Configuration
+                </button>
+                <button
+                  type="button"
+                  className={activeTab === 'employees' ? 'admin-tab admin-tab--active' : 'admin-tab'}
+                  onClick={() => setActiveTab('employees')}
+                >
+                  Manage Employees
+                </button>
+                <button
+                  type="button"
+                  className={activeTab === 'winners' ? 'admin-tab admin-tab--active' : 'admin-tab'}
+                  onClick={() => setActiveTab('winners')}
+                >
+                  Edit Winners
+                </button>
+              </div>
+
+              {activeTab === 'config' && (
+                <div className="admin-card admin-card--panel">
                 <form
                   className="admin-form"
                   onSubmit={async (event) => {
@@ -712,8 +740,10 @@ const AdminPanel = () => {
                   </button>
                 </form>
               </div>
+              )}
 
-              <div className="admin-card admin-card--roster">
+              {activeTab === 'employees' && (
+                <div className="admin-card admin-card--roster">
                 <div className="admin-card__header">
                   <h3>Employee List · {formSlug || currentGame?.slug || 'new'}</h3>
                   <span>{roster.length} names</span>
@@ -762,13 +792,43 @@ const AdminPanel = () => {
                     <button type="button" className="admin-form__button" onClick={handleAddBulk}>
                       Add to List
                     </button>
-                    <button
-                      type="button"
-                      className="admin-form__button"
-                      onClick={() => setShowWinnersModal(true)}
-                    >
-                      Manage Winners
-                    </button>
+                  </div>
+                </div>
+              </div>
+              )}
+
+              {activeTab === 'winners' && (
+                <div className="admin-card admin-card--winners">
+                  <div className="admin-card__header">
+                    <h3>Recent Winners</h3>
+                    <span>{winners.length} shown</span>
+                  </div>
+                  <div className="winner-edit-list">
+                    {winners.length ? (
+                      winners.map((winner) => (
+                        <div key={winner.id} className="winner-edit-row">
+                          <div className="winner-edit-info">
+                            <p>
+                              {winner.employee
+                                ? `${winner.employee.firstName ?? ''} ${winner.employee.lastName ?? ''}`.trim()
+                                : 'Former Employee'}
+                            </p>
+                            <span>{new Date(winner.drawnAt).toLocaleString()}</span>
+                          </div>
+                          <input
+                            className="winner-edit-input"
+                            type="text"
+                            value={winner.gift || ''}
+                            placeholder="Gift"
+                            onChange={(event) => handleUpdateWinnerGift(winner.id, event.target.value)}
+                          />
+                        </div>
+                      ))
+                    ) : (
+                      <p className="winner-edit-empty">No winners yet.</p>
+                    )}
+                  </div>
+                  <div className="admin-form__inline">
                     <button
                       type="button"
                       className="admin-form__button"
@@ -798,11 +858,31 @@ const AdminPanel = () => {
                     >
                       Export Winners
                     </button>
+                    <button
+                      type="button"
+                      className="admin-form__button admin-form__button--danger"
+                      onClick={async () => {
+                        if (!selectedGame) return
+                        const confirmed = window.confirm(
+                          'Reset winners and reactivate all employees for this game? This cannot be undone.',
+                        )
+                        if (!confirmed) return
+                        try {
+                          await request(`/api/admin/${selectedGame}/winners/reset`, { method: 'POST' })
+                          await fetchEmployees()
+                          await fetchWinners()
+                          setError('')
+                        } catch (err) {
+                          setError(err.message)
+                        }
+                      }}
+                    >
+                      Reset Winners
+                    </button>
                   </div>
                 </div>
-              </div>
-
-            </div>
+              )}
+            </>
           ) : (
             <div className="admin-empty-state">
               <h2>Select a game</h2>
@@ -811,67 +891,6 @@ const AdminPanel = () => {
           )}
         </div>
       </section>
-
-      {showWinnersModal && (
-        <div className="admin-modal" role="dialog" aria-modal="true">
-          <div className="admin-modal__card">
-            <div className="admin-card__header">
-              <h3>Recent Winners</h3>
-              <button type="button" onClick={() => setShowWinnersModal(false)}>
-                Close
-              </button>
-            </div>
-            <div className="winner-edit-list">
-              {winners.length ? (
-                winners.map((winner) => (
-                  <div key={winner.id} className="winner-edit-row">
-                    <div className="winner-edit-info">
-                      <p>
-                        {winner.employee
-                          ? `${winner.employee.firstName ?? ''} ${winner.employee.lastName ?? ''}`.trim()
-                          : 'Former Employee'}
-                      </p>
-                      <span>{new Date(winner.drawnAt).toLocaleString()}</span>
-                    </div>
-                    <input
-                      className="winner-edit-input"
-                      type="text"
-                      value={winner.gift || ''}
-                      placeholder="Gift"
-                      onChange={(event) => handleUpdateWinnerGift(winner.id, event.target.value)}
-                    />
-                  </div>
-                ))
-              ) : (
-                <p className="winner-edit-empty">No winners yet.</p>
-              )}
-            </div>
-            <div className="admin-form__inline">
-              <button
-                type="button"
-                className="admin-form__button admin-form__button--danger"
-                onClick={async () => {
-                  if (!selectedGame) return
-                  const confirmed = window.confirm(
-                    'Reset winners and reactivate all employees for this game? This cannot be undone.',
-                  )
-                  if (!confirmed) return
-                  try {
-                    await request(`/api/admin/${selectedGame}/winners/reset`, { method: 'POST' })
-                    await fetchEmployees()
-                    await fetchWinners()
-                    setError('')
-                  } catch (err) {
-                    setError(err.message)
-                  }
-                }}
-              >
-                Reset Winners
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </main>
   )
 }
